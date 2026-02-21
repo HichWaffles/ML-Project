@@ -7,7 +7,7 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import StandardScaler
-import sys
+from sklearn.ensemble import IsolationForest
 from pathlib import Path
 
 db_path = Path(__file__).parent.parent / "data" / "GeoLite2-City.mmdb"
@@ -291,3 +291,47 @@ def apply_standard_scaler(
             df_scaled[continuous_cols] = scaler.transform(df_scaled[continuous_cols])
 
     return df_scaled, scaler
+
+
+def remove_outliers_isolation_forest(
+    df: pd.DataFrame,
+    contamination: float = 0.05,
+    random_state: int = 42,
+    target_column: str = None,
+):
+    """
+    Identifies and replaces outlier values with NaN using Isolation Forest.
+
+    Parameters:
+    - df: The feature DataFrame.
+    - contamination: The percentage of outliers to remove.
+    - target_column: The name of the column to apply Isolation Forest to.
+                     If None, uses all numeric columns.
+    """
+    # 1. Select columns to evaluate
+    if target_column is not None:
+        df_eval = df[[target_column]]
+    else:
+        df_eval = df.select_dtypes(include=["number"])
+
+    if df_eval.empty:
+        print("Warning: No valid numeric data found for Isolation Forest.")
+        return df
+
+    col_names = target_column if target_column is not None else "all numeric columns"
+    print(
+        f"Running Isolation Forest on {col_names} to replace top {contamination*100}% of outlier rows with NaN..."
+    )
+
+    # 2. Fit and Predict
+    iso_forest = IsolationForest(contamination=contamination, random_state=random_state)
+    outlier_labels = iso_forest.fit_predict(df_eval)
+
+    # 3. Replace outlier rows with NaN in the evaluated columns
+    outlier_mask = outlier_labels == -1
+    df_clean = df.copy()
+    df_clean.loc[outlier_mask, df_eval.columns] = np.nan
+
+    print(f"Replaced {outlier_mask.sum()} outlier rows with NaN.")
+
+    return df_clean

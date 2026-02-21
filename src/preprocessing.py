@@ -3,6 +3,7 @@ import sys
 
 import pandas as pd
 import numpy as np
+from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE
 
@@ -16,6 +17,7 @@ from src.utils import (
     get_features_to_destroy,
     get_irrelevant_features,
     impute_missing_knn,
+    remove_outliers_isolation_forest,
     split_columns_by_nan_threshold,
     target_encode,
 )
@@ -56,10 +58,12 @@ columns_to_drop = [
 ]
 
 columns_with_nan_values = {
-    "SupportTickets": [-1, 999],
+    "SupportTicketsCount": [-1, 999],
     "SatisfactionScore": [-1, 0, 99],
     "GeoIP": ["Unspecified", "Unknown"],
 }
+
+has_extremes = {"SupportTicketsCount": 0.05, "SatisfactionScore": 0.05}
 
 
 def apply_ordinal_encoding(df: pd.DataFrame, mappings: dict) -> pd.DataFrame:
@@ -116,6 +120,14 @@ def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
 
     df = values_to_nan(df, columns_with_nan_values)
 
+    for col, extreme_pct in has_extremes.items():
+        if col in df.columns:
+            df = remove_outliers_isolation_forest(
+                df,
+                target_column=col,
+                contamination=extreme_pct,
+            )
+
     _, high_nan_cols = split_columns_by_nan_threshold(df, threshold=0.5)
     df = drop_unnecessary_columns(df, columns_to_drop + high_nan_cols)
 
@@ -161,14 +173,22 @@ def fit_transform_train(X_train: pd.DataFrame, y_train: pd.Series):
     redu_cols = get_features_to_destroy(X_train, target_cols=["Churn"], use_vif=False)
     irr_cols = get_irrelevant_features(X_train, target_cols=["Churn"], threshold=0.01)
     features_to_drop = redu_cols + irr_cols
-    
+
     X_train = drop_unnecessary_columns(X_train, features_to_drop)
-    
+
     y_train_clean = X_train["Churn"]
     X_train_clean = X_train.drop(columns=["Churn"], errors="ignore")
 
+    pca = PCA(n_components=5, random_state=42)
+    X_train_pca_array = pca.fit_transform(X_train_clean)
+
+    pca_cols = [f"PC{i+1}" for i in range(X_train_pca_array.shape[1])]
+    X_train_pca = pd.DataFrame(
+        X_train_pca_array, columns=pca_cols, index=X_train_clean.index
+    )
+
     smote = SMOTE(random_state=42)
-    X_train_bal, y_train_bal = smote.fit_resample(X_train_clean, y_train_clean)
+    X_train_bal, y_train_bal = smote.fit_resample(X_train_pca, y_train_clean)
 
     fitted_artifacts = {
         "country_enc": country_enc,
@@ -179,6 +199,7 @@ def fit_transform_train(X_train: pd.DataFrame, y_train: pd.Series):
         "knn_scaler": fitted_knn_scaler,
         "final_scaler": fitted_final_scaler,
         "features_to_drop": features_to_drop,
+        "pca": pca,
     }
 
     return X_train_bal, y_train_bal, fitted_artifacts
@@ -205,8 +226,12 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
         target_col="Churn",
     )
     X_test = drop_unnecessary_columns(X_test, fitted_artifacts["features_to_drop"])
+    pca = fitted_artifacts["pca"]
+    X_test_pca_array = pca.transform(X_test)
 
-    return X_test
+    pca_cols = [f"PC{i+1}" for i in range(X_test_pca_array.shape[1])]
+    X_test_pca = pd.DataFrame(X_test_pca_array, columns=pca_cols, index=X_test.index)
+    return X_test_pca
 
 
 def save_splits(X_train, X_test, y_train, y_test, out_dir: Path):
