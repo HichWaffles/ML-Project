@@ -5,8 +5,14 @@ from category_encoders import TargetEncoder
 import ipaddress
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
+from sklearn.impute import KNNImputer
+from sklearn.preprocessing import StandardScaler
+import sys
+from pathlib import Path
 
-reader = geoip2.database.Reader("../data/GeoLite2-City.mmdb")
+db_path = Path(__file__).parent.parent / "data" / "GeoLite2-City.mmdb"
+
+reader = geoip2.database.Reader(str(db_path))
 
 debug = True
 
@@ -25,21 +31,26 @@ def extract_ip_features(ip):
         return pd.Series([np.nan])
 
 
-def target_encode(df: pd.DataFrame, column: str, smoothing=10) -> pd.DataFrame:
-    """_summary_
-
-    Args:
-        df (pd.DataFrame): _description_
-        column (str): _description_
-        smoothing (int, optional): _description_. Defaults to 10.
-
-    Returns:
-        pd.DataFrame: _description_
+def target_encode(
+    df: pd.DataFrame, column: str, target_col: str = "Churn", smoothing=10, encoder=None
+) -> tuple:
     """
-    encoder = TargetEncoder(cols=[column], smoothing=smoothing)
-    df[column] = encoder.fit_transform(df[column], df["Churn"])
+    Applies target encoding. Fits a new encoder if none is provided (Train),
+    otherwise uses the existing encoder (Test).
+    """
+    df_encoded = df.copy()
 
-    return df
+    if encoder is None:
+        encoder = TargetEncoder(cols=[column], smoothing=smoothing)
+        # Fit and transform on training data
+        df_encoded[column] = encoder.fit_transform(
+            df_encoded[column], df_encoded[target_col]
+        )
+    else:
+        # Transform only on test data (target_col is ignored here)
+        df_encoded[column] = encoder.transform(df_encoded[column])
+
+    return df_encoded, encoder
 
 
 def get_features_to_destroy(
@@ -136,78 +147,92 @@ def get_features_to_destroy(
                 break
 
     # Return the combined set of all features to be removed
+    print(f"Features to drop based on correlation: {to_drop_corr}")
+    print(f"Features to drop based on VIF: {to_drop_vif}")
     return list(to_drop_corr | set(to_drop_vif))
 
 
-import pandas as pd
-from sklearn.impute import KNNImputer
-from sklearn.preprocessing import StandardScaler
-
-
-def impute_missing_knn(data: pd.DataFrame, target_columns: list = None, n_neighbors=6):
+def impute_missing_knn(
+    data: pd.DataFrame,
+    target_columns: list = None,
+    n_neighbors=6,
+    imputer=None,
+    scaler=None,
+) -> tuple:
     """
-    Standardizes data, performs KNN imputation, and returns data to original scale.
-
-    Parameters:
-    - data: pd.DataFrame
-    - target_columns: List of columns to impute (defaults to all numeric columns)
-    - n_neighbors: Number of neighbors for KNN
-
-    Returns:
-    - pd.DataFrame with imputed values
+    Performs KNN imputation avoiding data leakage.
+    Returns imputed dataframe, fitted imputer, and fitted scaler.
     """
-    # 1. Select only numeric data for the imputer
     df_numeric = data.select_dtypes(include=["number"])
+
+    # Exclude prediction target from imputation features to prevent leakage and shape mismatch
+    if "Churn" in df_numeric.columns:
+        df_numeric = df_numeric.drop(columns=["Churn"])
 
     if target_columns is None:
         target_columns = df_numeric.columns.tolist()
 
-    # 2. Scale the data
-    scaler = StandardScaler()
-    df_scaled = pd.DataFrame(
-        scaler.fit_transform(df_numeric),
-        columns=df_numeric.columns,
-        index=df_numeric.index,
-    )
+    # 1. Scale data for KNN (Fit on Train, Transform on Test)
+    if scaler is None:
+        scaler = StandardScaler()
+        df_scaled = pd.DataFrame(
+            scaler.fit_transform(df_numeric),
+            columns=df_numeric.columns,
+            index=df_numeric.index,
+        )
+    else:
+        df_scaled = pd.DataFrame(
+            scaler.transform(df_numeric),
+            columns=df_numeric.columns,
+            index=df_numeric.index,
+        )
 
-    # 3. Apply KNNImputer
-    imputer = KNNImputer(n_neighbors=n_neighbors)
-    df_imputed_scaled = pd.DataFrame(
-        imputer.fit_transform(df_scaled),
-        columns=df_numeric.columns,
-        index=df_numeric.index,
-    )
+    # 2. Impute (Fit on Train, Transform on Test)
+    if imputer is None:
+        imputer = KNNImputer(n_neighbors=n_neighbors)
+        df_imputed_scaled = pd.DataFrame(
+            imputer.fit_transform(df_scaled),
+            columns=df_numeric.columns,
+            index=df_numeric.index,
+        )
+    else:
+        df_imputed_scaled = pd.DataFrame(
+            imputer.transform(df_scaled),
+            columns=df_numeric.columns,
+            index=df_numeric.index,
+        )
 
-    # 4. Inverse transform
+    # 3. Inverse transform back to original scale
     df_final_numeric = pd.DataFrame(
         scaler.inverse_transform(df_imputed_scaled),
         columns=df_numeric.columns,
         index=df_numeric.index,
     )
 
-    # 5. Merge imputed columns back into a copy of the original dataframe
+    # 4. Merge back into original DataFrame
     df_output = data.copy()
     for col in target_columns:
-        df_output[col] = df_final_numeric[col]
+        if col in df_final_numeric.columns:
+            df_output[col] = df_final_numeric[col]
 
-    return df_output
+    return df_output, imputer, scaler
 
 
 def get_irrelevant_features(
-    df: pd.DataFrame, target_col: str = "Churn", threshold: float = 0.02
+    df: pd.DataFrame, target_cols: list = ["Churn"], threshold: float = 0.1
 ) -> list:
     """
     Identifies features with low correlation to the target variable.
 
     Parameters:
     - df: pd.DataFrame containing features and target
-    - target_col: Name of the target column
+    - target_cols: List of target column names
     - threshold: Minimum absolute correlation required to keep a feature
 
     Returns:
     - List of feature names that have low correlation with the target
     """
-    correlations = df.corr()[target_col].abs()
+    correlations = df.corr()[target_cols].abs().mean(axis=1)
     irrelevant_features = correlations[correlations < threshold].index.tolist()
     return irrelevant_features
 
@@ -235,3 +260,34 @@ def split_columns_by_nan_threshold(df: pd.DataFrame, threshold: float = 0.5) -> 
     high_nan_cols = cols_with_nans[cols_with_nans > threshold].index.tolist()
 
     return low_nan_cols, high_nan_cols
+
+
+def apply_standard_scaler(
+    df: pd.DataFrame, scaler=None, target_col: str = "Churn"
+) -> tuple:
+    """
+    Standardizes continuous numeric columns, explicitly excluding target and ordinals.
+    """
+    df_scaled = df.copy()
+    numeric_cols = df_scaled.select_dtypes(include=["number"]).columns.tolist()
+
+    if target_col in numeric_cols:
+        numeric_cols.remove(target_col)
+
+    # Isolate continuous variables (Assuming > 10 unique values means continuous)
+    if scaler is None:
+        continuous_cols = [
+            col for col in numeric_cols if len(df_scaled[col].dropna().unique()) > 10
+        ]
+        if continuous_cols:
+            scaler = StandardScaler()
+            df_scaled[continuous_cols] = scaler.fit_transform(
+                df_scaled[continuous_cols]
+            )
+    else:
+        # Use columns defined during fit to prevent mismatch on test set
+        continuous_cols = list(scaler.feature_names_in_)
+        if continuous_cols:
+            df_scaled[continuous_cols] = scaler.transform(df_scaled[continuous_cols])
+
+    return df_scaled, scaler
