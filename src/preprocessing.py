@@ -98,7 +98,9 @@ def parse_registration_date(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
+def prepare_features(
+    df: pd.DataFrame, target_encoding=True, impute=True
+) -> pd.DataFrame:
 
     df = apply_ordinal_encoding(df, ordinal_mappings)
     df = apply_one_hot_encoding(df, one_hot_cols)
@@ -122,7 +124,8 @@ def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
     low_nan_cols, high_nan_cols = split_columns_by_nan_threshold(df, threshold=0.5)
 
     # Technically this is useless because Age is extremely none correlated with churn.
-    df = impute_missing_knn(df, target_columns=low_nan_cols, n_neighbors=6)
+    if impute:
+        df = impute_missing_knn(df, target_columns=low_nan_cols, n_neighbors=6)
 
     # These always have to be dropped at the end, otherwise they mess with the correlation and VIF analyses.
     df = drop_unnecessary_columns(df, columns_to_drop + high_nan_cols)
