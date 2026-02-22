@@ -9,6 +9,20 @@ from sklearn.impute import KNNImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from pathlib import Path
+import logging
+from scipy import stats
+
+
+# Configure centralized logger
+logger = logging.getLogger("ml_prj")
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 db_path = Path(__file__).parent.parent / "data" / "GeoLite2-City.mmdb"
 
@@ -53,7 +67,7 @@ def target_encode(
     return df_encoded, encoder
 
 
-def get_features_to_destroy(
+def identify_redundant_features(
     df: pd.DataFrame,
     target_cols: list = ["Churn", "ChurnRiskCategory"],
     corr_threshold: float = 0.8,
@@ -147,8 +161,8 @@ def get_features_to_destroy(
                 break
 
     # Return the combined set of all features to be removed
-    print(f"Features to drop based on correlation: {to_drop_corr}")
-    print(f"Features to drop based on VIF: {to_drop_vif}")
+    logger.info(f"Features to drop based on correlation: {list(to_drop_corr)}")
+    logger.info(f"Features to drop based on VIF: {to_drop_vif}")
     return list(to_drop_corr | set(to_drop_vif))
 
 
@@ -218,7 +232,7 @@ def impute_missing_knn(
     return df_output, imputer, scaler
 
 
-def get_irrelevant_features(
+def identify_non_contributory_features(
     df: pd.DataFrame, target_cols: list = ["Churn"], threshold: float = 0.1
 ) -> list:
     """
@@ -315,11 +329,11 @@ def remove_outliers_isolation_forest(
         df_eval = df.select_dtypes(include=["number"])
 
     if df_eval.empty:
-        print("Warning: No valid numeric data found for Isolation Forest.")
+        logger.warning("No valid numeric data found for Isolation Forest.")
         return df
 
     col_names = target_column if target_column is not None else "all numeric columns"
-    print(
+    logger.info(
         f"Running Isolation Forest on {col_names} to replace top {contamination*100}% of outlier rows with NaN..."
     )
 
@@ -332,6 +346,29 @@ def remove_outliers_isolation_forest(
     df_clean = df.copy()
     df_clean.loc[outlier_mask, df_eval.columns] = np.nan
 
-    print(f"Replaced {outlier_mask.sum()} outlier rows with NaN.")
+    logger.info(f"Replaced {outlier_mask.sum()} outlier rows with NaN.")
 
     return df_clean
+
+
+def filter_outliers(df: pd.DataFrame, outlier_percentages: dict) -> pd.DataFrame:
+    """
+    Wrapper function to conditionally apply outlier removal.
+    """
+    # Calculate extreme outliers using MAD (Median Absolute Deviation) and z-score
+    for col, extreme_pct in outlier_percentages.items():
+        logger.info(
+            f"Column '{col}' has {extreme_pct:.2%} extreme outliers based on MAD."
+        )
+
+    for col, extreme_pct in outlier_percentages.items():
+        if col in df.columns:
+            # Clamp contamination to valid range (0.0, 0.5]
+            contamination = max(0.01, min(extreme_pct, 0.5))
+            df = remove_outliers_isolation_forest(
+                df,
+                target_column=col,
+                contamination=contamination,
+            )
+
+    return df

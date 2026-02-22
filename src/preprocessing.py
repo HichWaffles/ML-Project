@@ -14,12 +14,14 @@ if str(project_root) not in sys.path:
 from src.utils import (
     apply_standard_scaler,
     extract_ip_features,
-    get_features_to_destroy,
-    get_irrelevant_features,
+    filter_outliers,
+    identify_redundant_features,
+    identify_non_contributory_features,
     impute_missing_knn,
     remove_outliers_isolation_forest,
     split_columns_by_nan_threshold,
     target_encode,
+    logger
 )
 
 ordinal_mappings = {
@@ -63,7 +65,7 @@ columns_with_nan_values = {
     "GeoIP": ["Unspecified", "Unknown"],
 }
 
-has_extremes = {"SupportTicketsCount": 0.05, "SatisfactionScore": 0.05}
+outlier_percentages = {"SupportTicketsCount": 0.05, "SatisfactionScore": 0.05}
 
 
 def apply_ordinal_encoding(df: pd.DataFrame, mappings: dict) -> pd.DataFrame:
@@ -75,6 +77,37 @@ def apply_ordinal_encoding(df: pd.DataFrame, mappings: dict) -> pd.DataFrame:
 
 def apply_one_hot_encoding(df: pd.DataFrame, columns: list) -> pd.DataFrame:
     return pd.get_dummies(df, columns=columns, drop_first=True)
+
+
+def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Creates new features based on existing transaction and customer data in-place.
+    """
+
+    if "MonetaryTotal" in df.columns and "Frequency" in df.columns:
+        df["AvgBasketValue"] = np.where(
+            df["Frequency"] > 0, df["MonetaryTotal"] / df["Frequency"], 0
+        )
+
+    if "Recency" in df.columns and "CustomerTenure" in df.columns:
+        df["TenureRatio"] = np.where(
+            df["CustomerTenure"] > 0, df["Recency"] / df["CustomerTenure"], 0
+        )
+
+    if "SupportTicketsCount" in df.columns and "CustomerTenure" in df.columns:
+        df["TicketIntensity"] = df["SupportTicketsCount"] / (df["CustomerTenure"] + 1)
+
+    if "CancelledTrans" in df.columns and "Frequency" in df.columns:
+        df["CancellationRate"] = np.where(
+            df["Frequency"] > 0, df["CancelledTrans"] / df["Frequency"], 0
+        )
+
+    if "ZeroPriceCount" in df.columns and "TotalTrans" in df.columns:
+        df["ZeroPriceRatio"] = np.where(
+            df["TotalTrans"] > 0, df["ZeroPriceCount"] / df["TotalTrans"], 0
+        )
+
+    return df
 
 
 def parse_ip(df: pd.DataFrame) -> pd.DataFrame:
@@ -104,7 +137,8 @@ def values_to_nan(df: pd.DataFrame, columns_with_nan_values: dict) -> pd.DataFra
     return df
 
 
-def drop_unnecessary_columns(df: pd.DataFrame, columns: list) -> pd.DataFrame:
+def prune_nonessential_features(df: pd.DataFrame, columns: list) -> pd.DataFrame:
+    logger.info(f"Dropping {len(columns)} non-essential features.")
     return df.drop(columns=list(set(columns)), errors="ignore")
 
 
@@ -113,6 +147,7 @@ def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
     df = apply_one_hot_encoding(df, one_hot_cols)
     df = parse_ip(df)
     df = parse_registration_date(df)
+    df = engineer_features(df)
 
     if target_encoding:
         df, _ = target_encode(df, "Country", smoothing=30)
@@ -120,16 +155,10 @@ def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
 
     df = values_to_nan(df, columns_with_nan_values)
 
-    for col, extreme_pct in has_extremes.items():
-        if col in df.columns:
-            df = remove_outliers_isolation_forest(
-                df,
-                target_column=col,
-                contamination=extreme_pct,
-            )
+    df = filter_outliers(df, outlier_percentages)
 
     _, high_nan_cols = split_columns_by_nan_threshold(df, threshold=0.5)
-    df = drop_unnecessary_columns(df, columns_to_drop + high_nan_cols)
+    df = prune_nonessential_features(df, columns_to_drop + high_nan_cols)
 
     return df
 
@@ -137,10 +166,17 @@ def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
 def preprocess_data(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
     df = prepare_features(df, target_encoding=target_encoding)
 
-    redu_cols = get_features_to_destroy(df, use_vif=False)
-    irr_cols = get_irrelevant_features(df, target_cols=["Churn"], threshold=0.01)
+    redu_cols = identify_redundant_features(df, use_vif=False)
+    irr_cols = identify_non_contributory_features(
+        df, target_cols=["Churn"], threshold=0.01
+    )
 
-    df = drop_unnecessary_columns(df, redu_cols + irr_cols)
+    df = prune_nonessential_features(df, redu_cols + irr_cols)
+
+    df = filter_outliers(df, outlier_percentages)
+
+    low_nan_cols, _ = split_columns_by_nan_threshold(df, threshold=0.5)
+    df, _, _ = impute_missing_knn(df, target_columns=low_nan_cols)
 
     return df
 
@@ -163,18 +199,22 @@ def fit_transform_train(X_train: pd.DataFrame, y_train: pd.Series):
     )
 
     low_nan_cols, high_nan_cols = split_columns_by_nan_threshold(X_train, threshold=0.5)
-    X_train = drop_unnecessary_columns(X_train, high_nan_cols)
+    X_train = prune_nonessential_features(X_train, high_nan_cols)
 
     X_train, fitted_imputer, fitted_knn_scaler = impute_missing_knn(
         X_train, target_columns=low_nan_cols
     )
     X_train, fitted_final_scaler = apply_standard_scaler(X_train, target_col="Churn")
 
-    redu_cols = get_features_to_destroy(X_train, target_cols=["Churn"], use_vif=False)
-    irr_cols = get_irrelevant_features(X_train, target_cols=["Churn"], threshold=0.01)
+    redu_cols = identify_redundant_features(
+        X_train, target_cols=["Churn"], use_vif=False
+    )
+    irr_cols = identify_non_contributory_features(
+        X_train, target_cols=["Churn"], threshold=0.01
+    )
     features_to_drop = redu_cols + irr_cols
 
-    X_train = drop_unnecessary_columns(X_train, features_to_drop)
+    X_train = prune_nonessential_features(X_train, features_to_drop)
 
     y_train_clean = X_train["Churn"]
     X_train_clean = X_train.drop(columns=["Churn"], errors="ignore")
@@ -213,7 +253,7 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
     )
     X_test, _ = target_encode(X_test, "GeoIP", encoder=fitted_artifacts["geoip_enc"])
 
-    X_test = drop_unnecessary_columns(X_test, fitted_artifacts["high_nan_cols"])
+    X_test = prune_nonessential_features(X_test, fitted_artifacts["high_nan_cols"])
     X_test, _, _ = impute_missing_knn(
         X_test,
         target_columns=fitted_artifacts["low_nan_cols"],
@@ -225,7 +265,7 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
         scaler=fitted_artifacts["final_scaler"],
         target_col="Churn",
     )
-    X_test = drop_unnecessary_columns(X_test, fitted_artifacts["features_to_drop"])
+    X_test = prune_nonessential_features(X_test, fitted_artifacts["features_to_drop"])
     pca = fitted_artifacts["pca"]
     X_test_pca_array = pca.transform(X_test)
 
@@ -240,13 +280,13 @@ def save_splits(X_train, X_test, y_train, y_test, out_dir: Path):
     X_test.to_csv(out_dir / "X_test.csv", index=False)
     y_train.to_csv(out_dir / "y_train.csv", index=False)
     y_test.to_csv(out_dir / "y_test.csv", index=False)
-    print(f"Saved processed splits to {out_dir}")
+    logger.info(f"Saved processed splits to {out_dir}")
 
 
 def save_processed_data(df: pd.DataFrame, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_dir / "processed_data.csv", index=False)
-    print(f"Saved processed data to {out_dir}")
+    logger.info(f"Saved processed data to {out_dir}")
 
 
 def main():
@@ -260,10 +300,10 @@ def main():
 
     X_train, X_test, y_train, y_test = split_data(df)
 
-    print("Fitting transformations on X_train...")
+    logger.info("Fitting transformations on X_train...")
     X_train, y_train, fitted_artifacts = fit_transform_train(X_train, y_train)
 
-    print("Applying transformations to X_test...")
+    logger.info("Applying transformations to X_test...")
     X_test = transform_test(X_test, fitted_artifacts)
 
     save_splits(

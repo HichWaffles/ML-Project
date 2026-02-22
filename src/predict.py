@@ -10,7 +10,7 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.preprocessing import prepare_features, transform_test, drop_unnecessary_columns
+from src.utils import logger
 
 MODEL_PATHS = {
     "random_forest": project_root / "models" / "churn_rf_model.joblib",
@@ -72,25 +72,26 @@ def predict_all(new_data: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """
     return {name: predict(new_data, model_name=name) for name in MODEL_PATHS}
 
+
 def generate_reports(all_results: dict[str, pd.DataFrame], y_test: pd.Series):
     """Generates confusion matrices and ROC curves for all models."""
     reports_dir = project_root / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    
-    print("\nGenerating Evaluation Reports...")
-    
+
+    logger.info("Generating Evaluation Reports...")
+
     # 1. Confusion Matrices
     for model_name, results in all_results.items():
         plt.figure(figsize=(6, 5))
         cm = confusion_matrix(y_test, results["Churn_Prediction"])
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
         plt.title(f"Confusion Matrix: {model_name.replace('_', ' ').title()}")
-        plt.xlabel('Predicted')
-        plt.ylabel('Actual')
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
         cm_path = reports_dir / f"{model_name}_confusion_matrix.png"
         plt.tight_layout()
         plt.savefig(cm_path)
-        print(f"Saved Confusion Matrix to {cm_path}")
+        logger.info(f"Saved Confusion Matrix to {cm_path}")
         plt.close()
 
     # 2. ROC Curves (Combined)
@@ -98,43 +99,45 @@ def generate_reports(all_results: dict[str, pd.DataFrame], y_test: pd.Series):
     for model_name, results in all_results.items():
         fpr, tpr, _ = roc_curve(y_test, results["Churn_Probability"])
         auc = roc_auc_score(y_test, results["Churn_Probability"])
-        plt.plot(fpr, tpr, label=f"{model_name.replace('_', ' ').title()} (AUC = {auc:.4f})")
-        
-    plt.plot([0, 1], [0, 1], 'k--') # Diagonal line
+        plt.plot(
+            fpr, tpr, label=f"{model_name.replace('_', ' ').title()} (AUC = {auc:.4f})"
+        )
+
+    plt.plot([0, 1], [0, 1], "k--")  # Diagonal line
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic (ROC) Curves - All Models')
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("Receiver Operating Characteristic (ROC) Curves - All Models")
     plt.legend(loc="lower right")
-    
+
     roc_path = reports_dir / "roc_curves_combined.png"
     plt.tight_layout()
     plt.savefig(roc_path)
-    print(f"Saved Combined ROC Curves to {roc_path}")
+    logger.info(f"Saved Combined ROC Curves to {roc_path}")
     plt.close()
 
 
 def main():
     """Demonstrates predictions from all 3 models using the saved test set."""
-    print("Loading test dataset...")
+    logger.info("Loading test dataset for predictions...")
     data_dir = project_root / "data" / "train_test"
     X_test = pd.read_csv(data_dir / "X_test.csv")
     y_test = pd.read_csv(data_dir / "y_test.csv").squeeze()
 
     all_results = predict_all(X_test)
 
-    print("\n" + "=" * 60)
     for model_name, results in all_results.items():
         accuracy = (results["Churn_Prediction"] == y_test).mean()
 
-        print(f"\nModel: {model_name.replace('_', ' ').title()}")
-        print("-" * 40)
-        print(results[["Churn_Prediction", "Churn_Probability"]].head(10).to_string())
-        print(f"\nPrediction Accuracy on Test Set: {accuracy:.4f}")
-        print("=" * 60)
-        
+        logger.info(f"--- Model: {model_name.replace('_', ' ').title()} ---")
+        logger.info(
+            f"Sample Predictions:\n{results[['Churn_Prediction', 'Churn_Probability']].head(10).to_string()}"
+        )
+        logger.info(f"Prediction Accuracy on Test Set: {accuracy:.4f}")
+
     generate_reports(all_results, y_test)
+
 
 if __name__ == "__main__":
     main()

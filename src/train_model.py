@@ -11,15 +11,16 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from src.utils import logger
+
 
 def train_models():
     """Trains Random Forest, Logistic Regression, and Gradient Boosting classifiers
     on the preprocessed training data and saves each model."""
 
-    # 1. Load Data
     data_dir = project_root / "data" / "train_test"
 
-    print("Loading training data...")
+    logger.info("Loading training data...")
     X_train = pd.read_csv(data_dir / "X_train.csv")
     y_train = pd.read_csv(data_dir / "y_train.csv")
 
@@ -38,16 +39,10 @@ def train_models():
     # -------------------------------------------------------------------------
     # Model 1: Random Forest
     # -------------------------------------------------------------------------
-    print("\n" + "=" * 60)
-    print("MODEL 1: Random Forest")
-    print("=" * 60)
-    print("Setting up GridSearchCV for Random Forest Classifier...")
+    logger.info("--- MODEL 1: Random Forest ---")
+    logger.info("Setting up GridSearchCV for Random Forest Classifier...")
 
-    rf = RandomForestClassifier(
-        random_state=42,
-        n_jobs=-1,
-        class_weight="balanced"
-    )
+    rf = RandomForestClassifier(random_state=42, n_jobs=-1, class_weight="balanced")
 
     rf_param_grid = {
         "n_estimators": [50, 100, 200],
@@ -64,26 +59,24 @@ def train_models():
         n_jobs=-1,
     )
 
-    print("Starting Grid Search...")
+    logger.info("Starting Grid Search...")
     rf_grid.fit(X_train, y_train)
-    print(f"\nBest parameters: {rf_grid.best_params_}")
-    print(f"Best CV ROC-AUC: {rf_grid.best_score_:.4f}")
+    logger.info(f"Best parameters: {rf_grid.best_params_}")
+    logger.info(f"Best CV ROC-AUC: {rf_grid.best_score_:.4f}")
 
     rf_model = rf_grid.best_estimator_
     _evaluate(rf_model, X_test, y_test)
 
     rf_path = models_dir / "churn_rf_model.joblib"
     joblib.dump(rf_model, rf_path)
-    print(f"Saved → {rf_path}")
+    logger.info(f"Saved Random Forest model → {rf_path}")
     trained_models["random_forest"] = rf_model
 
     # -------------------------------------------------------------------------
     # Model 2: Logistic Regression
     # -------------------------------------------------------------------------
-    print("\n" + "=" * 60)
-    print("MODEL 2: Logistic Regression")
-    print("=" * 60)
-    print("Setting up GridSearchCV for Logistic Regression...")
+    logger.info("--- MODEL 2: Logistic Regression ---")
+    logger.info("Setting up GridSearchCV for Logistic Regression...")
 
     lr = LogisticRegression(
         random_state=42,
@@ -107,26 +100,24 @@ def train_models():
         n_jobs=-1,
     )
 
-    print("Starting Grid Search...")
+    logger.info("Starting Grid Search...")
     lr_grid.fit(X_train, y_train)
-    print(f"\nBest parameters: {lr_grid.best_params_}")
-    print(f"Best CV ROC-AUC: {lr_grid.best_score_:.4f}")
+    logger.info(f"Best parameters: {lr_grid.best_params_}")
+    logger.info(f"Best CV ROC-AUC: {lr_grid.best_score_:.4f}")
 
     lr_model = lr_grid.best_estimator_
     _evaluate(lr_model, X_test, y_test)
 
     lr_path = models_dir / "churn_lr_model.joblib"
     joblib.dump(lr_model, lr_path)
-    print(f"Saved → {lr_path}")
+    logger.info(f"Saved Logistic Regression model → {lr_path}")
     trained_models["logistic_regression"] = lr_model
 
     # -------------------------------------------------------------------------
     # Model 3: Gradient Boosting
     # -------------------------------------------------------------------------
-    print("\n" + "=" * 60)
-    print("MODEL 3: Gradient Boosting")
-    print("=" * 60)
-    print("Setting up GridSearchCV for Gradient Boosting Classifier...")
+    logger.info("--- MODEL 3: Gradient Boosting ---")
+    logger.info("Setting up GridSearchCV for Gradient Boosting Classifier...")
 
     gb = GradientBoostingClassifier(random_state=42)
 
@@ -146,43 +137,41 @@ def train_models():
         n_jobs=-1,
     )
 
-    print("Starting Grid Search...")
+    logger.info("Starting Grid Search...")
     gb_grid.fit(X_train, y_train)
-    print(f"\nBest parameters: {gb_grid.best_params_}")
-    print(f"Best CV ROC-AUC: {gb_grid.best_score_:.4f}")
+    logger.info(f"Best parameters: {gb_grid.best_params_}")
+    logger.info(f"Best CV ROC-AUC: {gb_grid.best_score_:.4f}")
 
     gb_model = gb_grid.best_estimator_
     _evaluate(gb_model, X_test, y_test)
 
     gb_path = models_dir / "churn_gb_model.joblib"
     joblib.dump(gb_model, gb_path)
-    print(f"Saved → {gb_path}")
+    logger.info(f"Saved Gradient Boosting model → {gb_path}")
     trained_models["gradient_boosting"] = gb_model
 
     # -------------------------------------------------------------------------
     # Summary
     # -------------------------------------------------------------------------
-    print("\n" + "=" * 60)
-    print("ALL MODELS TRAINED AND SAVED")
-    print("=" * 60)
+    logger.info("--- ALL MODELS TRAINED AND SAVED ---")
     for name, path in [
         ("Random Forest", "churn_rf_model.joblib"),
         ("Logistic Regression", "churn_lr_model.joblib"),
         ("Gradient Boosting", "churn_gb_model.joblib"),
     ]:
-        print(f"  {name:25s} → models/{path}")
+        logger.info(f"  {name:25s} → models/{path}")
 
     return trained_models
 
 
 def _evaluate(model, X_test, y_test):
-    """Prints classification report and ROC-AUC for a fitted model."""
-    print("\n--- Evaluation on Test Set ---")
+    """Logs classification report and ROC-AUC for a fitted model."""
+    logger.info("Evaluation on Test Set:")
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)[:, 1]
-    print(classification_report(y_test, y_pred))
+    logger.info(f"\n{classification_report(y_test, y_pred)}")
     auc = roc_auc_score(y_test, y_proba)
-    print(f"ROC-AUC Score: {auc:.4f}")
+    logger.info(f"ROC-AUC Score: {auc:.4f}")
 
 
 if __name__ == "__main__":
