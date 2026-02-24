@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from pathlib import Path
 import logging
+
 # from scipy import stats
 
 
@@ -350,11 +351,26 @@ def remove_outliers_isolation_forest(
     return df_clean
 
 
-def filter_outliers(df: pd.DataFrame, outlier_percentages: dict) -> pd.DataFrame:
+def filter_outliers(
+    df: pd.DataFrame, outlier_percentages: dict, calc: bool = False
+) -> pd.DataFrame:
     """
     Wrapper function to conditionally apply outlier removal.
     """
     # Calculate extreme outliers using MAD (Median Absolute Deviation) and z-score
+    if calc:
+        for col in df.select_dtypes(include=["number"]).columns:
+            if col in outlier_percentages:
+                continue
+            median = df[col].median()
+            mad = (df[col] - median).abs().median()
+            if mad > 0:
+                modified_z_scores = 0.6745 * (df[col] - median) / mad
+                extreme_outliers = (modified_z_scores.abs() > 3.5).sum()
+                extreme_pct = extreme_outliers / len(df)
+                if extreme_pct > 0:
+                    outlier_percentages[col] = extreme_pct
+
     for col, extreme_pct in outlier_percentages.items():
         logger.info(
             f"Column '{col}' has {extreme_pct:.2%} extreme outliers based on MAD."

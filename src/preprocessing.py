@@ -188,7 +188,9 @@ def split_data(df: pd.DataFrame, target_col: str = "Churn"):
     return train_test_split(X, y, test_size=0.2, random_state=40, stratify=y)
 
 
-def fit_transform_train(X_train: pd.DataFrame, y_train: pd.Series):
+def fit_transform_train(
+    X_train: pd.DataFrame, y_train: pd.Series, target_variance=0.99
+):
     X_train = X_train.copy()
     X_train["Churn"] = y_train
 
@@ -220,9 +222,14 @@ def fit_transform_train(X_train: pd.DataFrame, y_train: pd.Series):
     y_train_clean = X_train["Churn"]
     X_train_clean = X_train.drop(columns=["Churn"], errors="ignore")
 
-    pca = PCA(n_components=13, random_state=42)
+    pca = PCA(n_components=target_variance, random_state=42)
     X_train_pca_array = pca.fit_transform(X_train_clean)
-    logger.info("Remaining Variance after PCA: %s", pca.explained_variance_ratio_.sum())
+    n_components = pca.n_components_
+    logger.info(
+        "PCA n_components: %s, Explained Variance Ratio: %s",
+        n_components,
+        pca.explained_variance_ratio_.sum(),
+    )
 
     pca_cols = [f"PC{i+1}" for i in range(X_train_pca_array.shape[1])]
     X_train_pca = pd.DataFrame(
