@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from pathlib import Path
 import logging
-from scipy import stats
+# from scipy import stats
 
 
 # Configure centralized logger
@@ -341,12 +341,11 @@ def remove_outliers_isolation_forest(
     iso_forest = IsolationForest(contamination=contamination, random_state=random_state)
     outlier_labels = iso_forest.fit_predict(df_eval)
 
-    # 3. Replace outlier rows with NaN in the evaluated columns
+    # 3. Drop outlier rows
     outlier_mask = outlier_labels == -1
-    df_clean = df.copy()
-    df_clean.loc[outlier_mask, df_eval.columns] = np.nan
+    df_clean = df.drop(df.index[outlier_mask])
 
-    logger.info(f"Replaced {outlier_mask.sum()} outlier rows with NaN.")
+    logger.info(f"Removed {outlier_mask.sum()} outlier rows.")
 
     return df_clean
 
@@ -363,12 +362,10 @@ def filter_outliers(df: pd.DataFrame, outlier_percentages: dict) -> pd.DataFrame
 
     for col, extreme_pct in outlier_percentages.items():
         if col in df.columns:
-            # Clamp contamination to valid range (0.0, 0.5]
-            contamination = max(0.01, min(extreme_pct, 0.5))
             df = remove_outliers_isolation_forest(
                 df,
                 target_column=col,
-                contamination=contamination,
+                contamination=extreme_pct,
             )
 
     return df

@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 
+import joblib
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
@@ -21,7 +22,7 @@ from src.utils import (
     remove_outliers_isolation_forest,
     split_columns_by_nan_threshold,
     target_encode,
-    logger
+    logger,
 )
 
 ordinal_mappings = {
@@ -219,8 +220,9 @@ def fit_transform_train(X_train: pd.DataFrame, y_train: pd.Series):
     y_train_clean = X_train["Churn"]
     X_train_clean = X_train.drop(columns=["Churn"], errors="ignore")
 
-    pca = PCA(n_components=5, random_state=42)
+    pca = PCA(n_components=13, random_state=42)
     X_train_pca_array = pca.fit_transform(X_train_clean)
+    logger.info("Remaining Variance after PCA: %s", pca.explained_variance_ratio_.sum())
 
     pca_cols = [f"PC{i+1}" for i in range(X_train_pca_array.shape[1])]
     X_train_pca = pd.DataFrame(
@@ -302,6 +304,12 @@ def main():
 
     logger.info("Fitting transformations on X_train...")
     X_train, y_train, fitted_artifacts = fit_transform_train(X_train, y_train)
+
+    # Save  the fitted artifacts for use in test transformation and future predictions in model_dir
+    model_dir = project_root / "models"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump(fitted_artifacts, model_dir / "fitted_artifacts.joblib")
+    logger.info(f"Saved fitted artifacts → {model_dir / 'fitted_artifacts.joblib'}")
 
     logger.info("Applying transformations to X_test...")
     X_test = transform_test(X_test, fitted_artifacts)
