@@ -133,9 +133,7 @@ def parse_registration_date(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def compute_days_since_registration(
-    df: pd.DataFrame, reference_date=None
-) -> tuple:
+def compute_days_since_registration(df: pd.DataFrame, reference_date=None) -> tuple:
     """Computes DaysSinceRegistration using a fixed reference_date.
 
     During training, pass reference_date=None so it is inferred from the
@@ -192,7 +190,7 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
 
     low_nan_cols, high_nan_cols = split_columns_by_nan_threshold(df, threshold=0.5)
 
-    df = prune_nonessential_features(df, redu_cols + irr_cols + high_nan_cols)
+    df = prune_nonessential_features(df, high_nan_cols)
 
     # Single outlier-removal pass (duplicate call removed)
     df = filter_outliers(df, outlier_percentages)
@@ -328,11 +326,11 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
     )
     X_test = prune_nonessential_features(X_test, fitted_artifacts["features_to_drop"])
     pca = fitted_artifacts["pca"]
-    
+
     # Ensure columns match exactly the order expected by PCA
     if hasattr(pca, "feature_names_in_"):
         X_test = X_test[list(pca.feature_names_in_)]
-        
+
     X_test_pca_array = pca.transform(X_test)
 
     pca_cols = [f"PC{i+1}" for i in range(X_test_pca_array.shape[1])]
