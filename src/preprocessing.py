@@ -57,7 +57,9 @@ columns_to_drop = [
     "CustomerID",
     "NewsletterSubscribed",
     "LastLoginIP",
-    "RegistrationDate",
+    # NOTE: RegistrationDate is NOT dropped here; it must survive into
+    # fit_transform_train / transform_test so compute_days_since_registration
+    # can read it. It is dropped there, after DaysSinceRegistration is created.
 ]
 
 columns_with_nan_values = {
@@ -117,6 +119,10 @@ def parse_ip(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_registration_date(df: pd.DataFrame) -> pd.DataFrame:
+    """Parses RegistrationDate into component features (year, month, day, weekday).
+    DaysSinceRegistration is intentionally NOT computed here to avoid leakage;
+    call compute_days_since_registration() separately after the train/test split.
+    """
     df["RegistrationDate"] = pd.to_datetime(
         df["RegistrationDate"], format="mixed", dayfirst=True, errors="coerce"
     )
@@ -124,11 +130,22 @@ def parse_registration_date(df: pd.DataFrame) -> pd.DataFrame:
     df["RegistrationMonth"] = df["RegistrationDate"].dt.month
     df["RegistrationDay"] = df["RegistrationDate"].dt.day
     df["RegistrationDayOfWeek"] = df["RegistrationDate"].dt.dayofweek
-
-    max_date = df["RegistrationDate"].max()
-    df["DaysSinceRegistration"] = (max_date - df["RegistrationDate"]).dt.days
-
     return df
+
+
+def compute_days_since_registration(
+    df: pd.DataFrame, reference_date=None
+) -> tuple:
+    """Computes DaysSinceRegistration using a fixed reference_date.
+
+    During training, pass reference_date=None so it is inferred from the
+    training split only. Save the returned reference_date as a fitted artifact
+    and pass it back here when transforming the test set or new data.
+    """
+    if reference_date is None:
+        reference_date = df["RegistrationDate"].max()
+    df["DaysSinceRegistration"] = (reference_date - df["RegistrationDate"]).dt.days
+    return df, reference_date
 
 
 def values_to_nan(df: pd.DataFrame, columns_with_nan_values: dict) -> pd.DataFrame:
@@ -143,41 +160,44 @@ def prune_nonessential_features(df: pd.DataFrame, columns: list) -> pd.DataFrame
     return df.drop(columns=list(set(columns)), errors="ignore")
 
 
-def prepare_features(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
+def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Applies purely structural transformations that are safe to run on the full
+    dataset before splitting (no statistics derived from the target column,
+    no outlier removal, no imputation).
+
+    Target encoding, outlier removal, imputation, and scaling are all deferred
+    to fit_transform_train() / transform_test() to prevent data leakage.
+    """
     df = apply_ordinal_encoding(df, ordinal_mappings)
     df = apply_one_hot_encoding(df, one_hot_cols)
     df = parse_ip(df)
     df = parse_registration_date(df)
     df = engineer_features(df)
-
-    if target_encoding:
-        df, _ = target_encode(df, "Country", smoothing=30)
-        df, _ = target_encode(df, "GeoIP", smoothing=20)
-
     df = values_to_nan(df, columns_with_nan_values)
 
-    df = filter_outliers(df, outlier_percentages)
-
-    _, high_nan_cols = split_columns_by_nan_threshold(df, threshold=0.5)
-    df = prune_nonessential_features(df, columns_to_drop + high_nan_cols)
+    df = prune_nonessential_features(df, columns_to_drop)
 
     return df
 
 
-def preprocess_data(df: pd.DataFrame, target_encoding=True) -> pd.DataFrame:
-    df = prepare_features(df, target_encoding=target_encoding)
+def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
+    """EDA / exploratory helper only — NOT used in the training pipeline.
 
-    redu_cols = identify_redundant_features(df, use_vif=False)
-    irr_cols = identify_non_contributory_features(
-        df, target_cols=["Churn"], threshold=0.01
-    )
+    WARNING: This function operates on the full (unsplit) DataFrame. Calling it
+    before train_test_split will produce data leakage if the result is used for
+    model training. Use fit_transform_train() / transform_test() for the actual
+    pipeline.
+    """
+    df = prepare_features(df)
 
-    df = prune_nonessential_features(df, redu_cols + irr_cols)
+    low_nan_cols, high_nan_cols = split_columns_by_nan_threshold(df, threshold=0.5)
 
+    df = prune_nonessential_features(df, redu_cols + irr_cols + high_nan_cols)
+
+    # Single outlier-removal pass (duplicate call removed)
     df = filter_outliers(df, outlier_percentages)
 
-    low_nan_cols, _ = split_columns_by_nan_threshold(df, threshold=0.5)
-    df, _, _ = impute_missing_knn(df, target_columns=low_nan_cols)
+    df, _, _ = impute_missing_knn(df)
 
     return df
 
@@ -194,6 +214,24 @@ def fit_transform_train(
     X_train = X_train.copy()
     X_train["Churn"] = y_train
 
+    # --- Step 1: Compute DaysSinceRegistration on train only ---
+    # reference_date is inferred from X_train and saved as an artifact so the
+    # same fixed date is applied to the test set and future inference data.
+    X_train, reference_date = compute_days_since_registration(X_train)
+    # Drop raw date column now that the engineered feature has been created
+    X_train = X_train.drop(columns=["RegistrationDate"], errors="ignore")
+    logger.info(f"Training reference_date for DaysSinceRegistration: {reference_date}")
+
+    # --- Step 2: Outlier removal on training data only ---
+    # IsolationForest is fitted and applied here so test rows never influence
+    # the outlier detection boundary.
+    X_train = filter_outliers(X_train, outlier_percentages)
+    # Re-sync y_train after rows may have been dropped
+    y_train_clean = X_train["Churn"]
+    X_train = X_train.drop(columns=["Churn"], errors="ignore")
+    X_train["Churn"] = y_train_clean  # keep Churn attached for target-encoding
+
+    # --- Step 3: Target encoding (fit on train labels only) ---
     X_train, country_enc = target_encode(
         X_train, "Country", target_col="Churn", smoothing=30
     )
@@ -201,14 +239,16 @@ def fit_transform_train(
         X_train, "GeoIP", target_col="Churn", smoothing=20
     )
 
+    # --- Step 4: Drop high-NaN columns, impute low-NaN columns ---
     low_nan_cols, high_nan_cols = split_columns_by_nan_threshold(X_train, threshold=0.5)
     X_train = prune_nonessential_features(X_train, high_nan_cols)
 
-    X_train, fitted_imputer, fitted_knn_scaler = impute_missing_knn(
-        X_train, target_columns=low_nan_cols
-    )
+    X_train, fitted_imputer, fitted_knn_scaler = impute_missing_knn(X_train)
+
+    # --- Step 5: Scale ---
     X_train, fitted_final_scaler = apply_standard_scaler(X_train, target_col="Churn")
 
+    # --- Step 6: Feature selection (train data only) ---
     redu_cols = identify_redundant_features(
         X_train, target_cols=["Churn"], use_vif=False
     )
@@ -222,6 +262,7 @@ def fit_transform_train(
     y_train_clean = X_train["Churn"]
     X_train_clean = X_train.drop(columns=["Churn"], errors="ignore")
 
+    # --- Step 7: PCA ---
     pca = PCA(n_components=target_variance, random_state=42)
     X_train_pca_array = pca.fit_transform(X_train_clean)
     n_components = pca.n_components_
@@ -236,10 +277,12 @@ def fit_transform_train(
         X_train_pca_array, columns=pca_cols, index=X_train_clean.index
     )
 
+    # --- Step 8: SMOTE balancing ---
     smote = SMOTE(random_state=42)
     X_train_bal, y_train_bal = smote.fit_resample(X_train_pca, y_train_clean)
 
     fitted_artifacts = {
+        "reference_date": reference_date,
         "country_enc": country_enc,
         "geoip_enc": geoip_enc,
         "high_nan_cols": high_nan_cols,
@@ -255,7 +298,17 @@ def fit_transform_train(
 
 
 def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame:
+    """Applies all fitted transformers to the test set (or new inference data).
+    Uses saved artifacts so no test statistics influence any transformation.
+    """
     X_test = X_test.copy()
+
+    # Apply fixed reference_date from training — no leakage from test dates
+    X_test, _ = compute_days_since_registration(
+        X_test, reference_date=fitted_artifacts["reference_date"]
+    )
+    # Drop raw date column now that the engineered feature has been created
+    X_test = X_test.drop(columns=["RegistrationDate"], errors="ignore")
 
     X_test, _ = target_encode(
         X_test, "Country", encoder=fitted_artifacts["country_enc"]
@@ -265,7 +318,6 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
     X_test = prune_nonessential_features(X_test, fitted_artifacts["high_nan_cols"])
     X_test, _, _ = impute_missing_knn(
         X_test,
-        target_columns=fitted_artifacts["low_nan_cols"],
         imputer=fitted_artifacts["imputer"],
         scaler=fitted_artifacts["knn_scaler"],
     )
@@ -276,6 +328,11 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
     )
     X_test = prune_nonessential_features(X_test, fitted_artifacts["features_to_drop"])
     pca = fitted_artifacts["pca"]
+    
+    # Ensure columns match exactly the order expected by PCA
+    if hasattr(pca, "feature_names_in_"):
+        X_test = X_test[list(pca.feature_names_in_)]
+        
     X_test_pca_array = pca.transform(X_test)
 
     pca_cols = [f"PC{i+1}" for i in range(X_test_pca_array.shape[1])]
@@ -304,21 +361,23 @@ def main():
     )
     df = pd.read_csv(data_path)
 
-    df = prepare_features(df, target_encoding=False)
+    # Structural transforms only — no target-derived statistics, no outlier removal
+    df = prepare_features(df)
     save_processed_data(df, out_dir=project_root / "data" / "processed")
 
+    # Split BEFORE any target-aware or statistical fitting
     X_train, X_test, y_train, y_test = split_data(df)
 
     logger.info("Fitting transformations on X_train...")
     X_train, y_train, fitted_artifacts = fit_transform_train(X_train, y_train)
 
-    # Save  the fitted artifacts for use in test transformation and future predictions in model_dir
+    # Save the fitted artifacts for test transformation and future inference
     model_dir = project_root / "models"
     model_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(fitted_artifacts, model_dir / "fitted_artifacts.joblib")
     logger.info(f"Saved fitted artifacts → {model_dir / 'fitted_artifacts.joblib'}")
 
-    logger.info("Applying transformations to X_test...")
+    logger.info("Applying transformations to X_test using fitted artifacts...")
     X_test = transform_test(X_test, fitted_artifacts)
 
     save_splits(

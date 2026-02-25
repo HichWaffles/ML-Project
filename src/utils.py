@@ -70,7 +70,7 @@ def target_encode(
 
 def identify_redundant_features(
     df: pd.DataFrame,
-    target_cols: list = ["Churn", "ChurnRiskCategory"],
+    target_cols: list = None,
     corr_threshold: float = 0.8,
     use_vif: bool = True,
     vif_threshold: float = 10.0,
@@ -93,6 +93,9 @@ def identify_redundant_features(
     Returns:
         list: A list of feature column names that should be dropped.
     """
+
+    if target_cols is None:
+        target_cols = ["Churn", "ChurnRiskCategory"]
 
     # 1. Create a features-only dataframe
     # Cast to float immediately to ensure mathematical stability for bools
@@ -234,7 +237,7 @@ def impute_missing_knn(
 
 
 def identify_non_contributory_features(
-    df: pd.DataFrame, target_cols: list = ["Churn"], threshold: float = 0.1
+    df: pd.DataFrame, target_cols: list = None, threshold: float = 0.1
 ) -> list:
     """
     Identifies features with low correlation to the target variable.
@@ -247,6 +250,8 @@ def identify_non_contributory_features(
     Returns:
     - List of feature names that have low correlation with the target
     """
+    if target_cols is None:
+        target_cols = ["Churn"]
     correlations = df.corr()[target_cols].abs().mean(axis=1)
     irrelevant_features = correlations[correlations < threshold].index.tolist()
     return irrelevant_features
