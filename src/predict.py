@@ -16,6 +16,7 @@ MODEL_PATHS = {
     "random_forest": project_root / "models" / "churn_rf_model.joblib",
     "logistic_regression": project_root / "models" / "churn_lr_model.joblib",
     "gradient_boosting": project_root / "models" / "churn_gb_model.joblib",
+    "xgboost": project_root / "models" / "churn_xgb_model.joblib",
 }
 
 
@@ -37,7 +38,7 @@ def predict(
 
     Parameters:
         - new_data:    pd.DataFrame containing the same features as the training data
-        - model_name:  One of 'random_forest', 'logistic_regression', 'gradient_boosting'
+        - model_name:  One of 'random_forest', 'logistic_regression', 'gradient_boosting', 'xgboost'
 
     Returns:
         - pd.DataFrame with original features plus 'Churn_Prediction' and 'Churn_Probability'
@@ -61,7 +62,7 @@ def predict(
 
 def predict_all(new_data: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """
-    Runs predictions from all 3 models and returns a dict of results DataFrames,
+    Runs predictions from all 4 models and returns a dict of results DataFrames,
     keyed by model name.
 
     Parameters:
@@ -119,7 +120,7 @@ def generate_reports(all_results: dict[str, pd.DataFrame], y_test: pd.Series):
 
 
 def main():
-    """Demonstrates predictions from all 3 models using the saved test set."""
+    """Demonstrates predictions from all 4 models using the saved test set."""
     logger.info("Loading test dataset for predictions...")
     data_dir = project_root / "data" / "train_test"
     X_test = pd.read_csv(data_dir / "X_test.csv")

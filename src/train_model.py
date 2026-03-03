@@ -5,6 +5,7 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report, roc_auc_score
+from xgboost import XGBClassifier
 import joblib
 
 project_root = Path(__file__).parent.parent
@@ -15,8 +16,8 @@ from src.utils import logger
 
 
 def train_models():
-    """Trains Random Forest, Logistic Regression, and Gradient Boosting classifiers
-    on the preprocessed training data and saves each model."""
+    """Trains Random Forest, Logistic Regression, Gradient Boosting, and XGBoost
+    classifiers on the preprocessed training data and saves each model."""
 
     data_dir = project_root / "data" / "train_test"
 
@@ -151,6 +152,56 @@ def train_models():
     trained_models["gradient_boosting"] = gb_model
 
     # -------------------------------------------------------------------------
+    # Model 4: XGBoost
+    # -------------------------------------------------------------------------
+    logger.info("--- MODEL 4: XGBoost ---")
+    logger.info("Setting up GridSearchCV for XGBoost Classifier...")
+
+    # Compute scale_pos_weight to handle class imbalance (equivalent to class_weight="balanced")
+    neg_count = (y_train == 0).sum()
+    pos_count = (y_train == 1).sum()
+    scale_pos_weight = neg_count / pos_count
+    logger.info(f"Using scale_pos_weight={scale_pos_weight:.2f} for class imbalance")
+
+    xgb = XGBClassifier(
+        random_state=42,
+        n_jobs=-1,
+        scale_pos_weight=scale_pos_weight,
+        eval_metric="auc",
+        verbosity=0,
+    )
+
+    xgb_param_grid = {
+        "n_estimators": [100, 200, 300],
+        "max_depth": [3, 5, 7],
+        "learning_rate": [0.05, 0.1, 0.2],
+        "subsample": [0.8, 1.0],
+        "colsample_bytree": [0.8, 1.0],
+    }
+
+    xgb_grid = GridSearchCV(
+        estimator=xgb,
+        param_grid=xgb_param_grid,
+        cv=3,
+        scoring="roc_auc",
+        verbose=1,
+        n_jobs=-1,
+    )
+
+    logger.info("Starting Grid Search...")
+    xgb_grid.fit(X_train, y_train)
+    logger.info(f"Best parameters: {xgb_grid.best_params_}")
+    logger.info(f"Best CV ROC-AUC: {xgb_grid.best_score_:.4f}")
+
+    xgb_model = xgb_grid.best_estimator_
+    _evaluate(xgb_model, X_test, y_test)
+
+    xgb_path = models_dir / "churn_xgb_model.joblib"
+    joblib.dump(xgb_model, xgb_path)
+    logger.info(f"Saved XGBoost model → {xgb_path}")
+    trained_models["xgboost"] = xgb_model
+
+    # -------------------------------------------------------------------------
     # Summary
     # -------------------------------------------------------------------------
     logger.info("--- ALL MODELS TRAINED AND SAVED ---")
@@ -158,6 +209,7 @@ def train_models():
         ("Random Forest", "churn_rf_model.joblib"),
         ("Logistic Regression", "churn_lr_model.joblib"),
         ("Gradient Boosting", "churn_gb_model.joblib"),
+        ("XGBoost", "churn_xgb_model.joblib"),
     ]:
         logger.info(f"  {name:25s} → models/{path}")
 
