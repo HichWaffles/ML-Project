@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from pathlib import Path
 import logging
+import re
 
 # from scipy import stats
 
@@ -390,3 +391,22 @@ def filter_outliers(
             )
 
     return df
+
+
+def clean_column_name(col: str) -> str:
+    # Step 1: Remove underscores, replace with space
+    col = col.replace("_", " ")
+
+    # Step 2: Insert space before a single uppercase letter preceded by lowercase
+    # e.g. "camelCase" -> "camel Case"
+    # but NOT "GeoIP" -> "Geo IP" (consecutive uppercase letters are kept together)
+    col = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", col)
+
+    # Step 3: Collapse any runs of whitespace between consecutive uppercase letters
+    # e.g. "GEO IP" (if spaces crept in) -> "GEOIP"
+    col = re.sub(r"([A-Z])\s+([A-Z])", r"\1\2", col)
+
+    # Step 4: Strip and normalize internal whitespace
+    col = re.sub(r"\s+", " ", col).strip()
+
+    return col

@@ -1,0 +1,132 @@
+{
+    "Frequency": {
+        "type": "int"
+    },
+    "Monetary Total": {
+        "type": "float"
+    },
+    "Max Quantity": {
+        "type": "int"
+    },
+    "Customer Tenure Days": {
+        "type": "int"
+    },
+    "First Purchase Days Ago": {
+        "type": "int"
+    },
+    "Preferred Day Of Week": {
+        "type": "int"
+    },
+    "Preferred Month": {
+        "type": "int"
+    },
+    "Weekend Purchase Ratio": {
+        "type": "float"
+    },
+    "Avg Days Between Purchases": {
+        "type": "float"
+    },
+    "Unique Descriptions": {
+        "type": "int"
+    },
+    "Unique Countries": {
+        "type": "int"
+    },
+    "Negative Quantity Count": {
+        "type": "int"
+    },
+    "Zero Price Count": {
+        "type": "int"
+    },
+    "Return Ratio": {
+        "type": "float"
+    },
+    "Avg Lines Per Invoice": {
+        "type": "float"
+    },
+    "Age": {
+        "type": "float"
+    },
+    "Satisfaction Score": {
+        "type": "float"
+    },
+    "RFMSegment": {
+        "type": "str"
+    },
+    "Spending Category": {
+        "type": "str"
+    },
+    "Churn Risk Category": {
+        "type": "str"
+    },
+    "Basket Size Category": {
+        "type": "str"
+    },
+    "Country": {
+        "type": "str"
+    },
+    "Geo IP": {
+        "type": "str"
+    },
+    "Registration Month": {
+        "type": "str"
+    },
+    "Registration Day": {
+        "type": "str"
+    },
+    "Registration Day Of Week": {
+        "type": "str"
+    },
+    "Avg Basket Value": {
+        "type": "float"
+    },
+    "Days Since Registration": {
+        "type": "int"
+    },
+    "Customer Type": {
+        "type": "select",
+        "values": [
+            "Hyperactif",
+            "Nouveau",
+            "Occasionnel",
+            "Perdu",
+            "Régulier"
+        ]
+    },
+    "Favorite Season": {
+        "type": "select",
+        "values": [
+            "Automne",
+            "Hiver",
+            "Printemps",
+            "Été"
+        ]
+    },
+    "Region": {
+        "type": "select",
+        "values": [
+            "Europe continentale",
+            "Europe de l'Est",
+            "Europe du Nord",
+            "Océanie",
+            "UK"
+        ]
+    },
+    "Product Diversity": {
+        "type": "select",
+        "values": [
+            "Explorateur",
+            "Modéré",
+            "Spécialisé"
+        ]
+    },
+    "Account Status": {
+        "type": "select",
+        "values": [
+            "Active",
+            "Closed",
+            "Pending",
+            "Suspended"
+        ]
+    }
+}

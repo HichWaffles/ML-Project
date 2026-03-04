@@ -1,4 +1,6 @@
+from collections import defaultdict
 from pathlib import Path
+import re
 import sys
 
 import joblib
@@ -7,6 +9,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE
+import json
 
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
@@ -22,6 +25,7 @@ from src.utils import (
     remove_outliers_isolation_forest,
     split_columns_by_nan_threshold,
     target_encode,
+    clean_column_name,
     logger,
 )
 
@@ -66,6 +70,8 @@ columns_with_nan_values = {
     "SupportTicketsCount": [-1, 999],
     "SatisfactionScore": [-1, 0, 99],
     "GeoIP": ["Unspecified", "Unknown"],
+    "Gender": ["Unknown"],
+    "WeekendPreference": ["Inconnu"],
 }
 
 outlier_percentages = {"SupportTicketsCount": 0.05, "SatisfactionScore": 0.05}
@@ -154,7 +160,7 @@ def values_to_nan(df: pd.DataFrame, columns_with_nan_values: dict) -> pd.DataFra
 
 
 def prune_nonessential_features(df: pd.DataFrame, columns: list) -> pd.DataFrame:
-    logger.info(f"Dropping {len(columns)} non-essential features.")
+    logger.info(f"Dropping {len(columns)} non-essential features. Examples: {columns}")
     return df.drop(columns=list(set(columns)), errors="ignore")
 
 
@@ -166,12 +172,12 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     Target encoding, outlier removal, imputation, and scaling are all deferred
     to fit_transform_train() / transform_test() to prevent data leakage.
     """
+    df = values_to_nan(df, columns_with_nan_values)
     df = apply_ordinal_encoding(df, ordinal_mappings)
     df = apply_one_hot_encoding(df, one_hot_cols)
     df = parse_ip(df)
     df = parse_registration_date(df)
     df = engineer_features(df)
-    df = values_to_nan(df, columns_with_nan_values)
 
     df = prune_nonessential_features(df, columns_to_drop)
 
@@ -207,27 +213,24 @@ def split_data(df: pd.DataFrame, target_col: str = "Churn"):
 
 
 def fit_transform_train(
-    X_train: pd.DataFrame, y_train: pd.Series, target_variance=0.99
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    raw_df: pd.DataFrame,
+    target_variance=0.99,
 ):
     X_train = X_train.copy()
     X_train["Churn"] = y_train
 
     # --- Step 1: Compute DaysSinceRegistration on train only ---
-    # reference_date is inferred from X_train and saved as an artifact so the
-    # same fixed date is applied to the test set and future inference data.
     X_train, reference_date = compute_days_since_registration(X_train)
-    # Drop raw date column now that the engineered feature has been created
     X_train = X_train.drop(columns=["RegistrationDate"], errors="ignore")
     logger.info(f"Training reference_date for DaysSinceRegistration: {reference_date}")
 
     # --- Step 2: Outlier removal on training data only ---
-    # IsolationForest is fitted and applied here so test rows never influence
-    # the outlier detection boundary.
     X_train = filter_outliers(X_train, outlier_percentages)
-    # Re-sync y_train after rows may have been dropped
     y_train_clean = X_train["Churn"]
     X_train = X_train.drop(columns=["Churn"], errors="ignore")
-    X_train["Churn"] = y_train_clean  # keep Churn attached for target-encoding
+    X_train["Churn"] = y_train_clean
 
     # --- Step 3: Target encoding (fit on train labels only) ---
     X_train, country_enc = target_encode(
@@ -240,7 +243,6 @@ def fit_transform_train(
     # --- Step 4: Drop high-NaN columns, impute low-NaN columns ---
     low_nan_cols, high_nan_cols = split_columns_by_nan_threshold(X_train, threshold=0.5)
     X_train = prune_nonessential_features(X_train, high_nan_cols)
-
     X_train, fitted_imputer, fitted_knn_scaler = impute_missing_knn(X_train)
 
     # --- Step 5: Scale ---
@@ -254,11 +256,59 @@ def fit_transform_train(
         X_train, target_cols=["Churn"], threshold=0.01
     )
     features_to_drop = redu_cols + irr_cols
-
     X_train = prune_nonessential_features(X_train, features_to_drop)
 
     y_train_clean = X_train["Churn"]
     X_train_clean = X_train.drop(columns=["Churn"], errors="ignore")
+
+    # --- Step 6b: Build columns_types metadata for the UI ---
+    one_hot_prefix_map = {prefix: clean_column_name(prefix) for prefix in one_hot_cols}
+
+    one_hot_groups = {}
+    for raw_prefix, cleaned_prefix in one_hot_prefix_map.items():
+        if raw_prefix not in raw_df.columns:
+            logger.warning(
+                f"One-hot prefix '{raw_prefix}' not found in raw_df, skipping."
+            )
+            continue
+
+        # Check at least one encoded column survived feature selection
+        surviving_cols = [
+            col for col in X_train_clean.columns if col.startswith(raw_prefix + "_")
+        ]
+        if not surviving_cols:
+            logger.info(
+                f"All encoded columns for '{raw_prefix}' were dropped during feature selection, skipping."
+            )
+            continue
+
+        one_hot_groups[cleaned_prefix] = sorted(
+            raw_df[raw_prefix].dropna().unique().tolist()
+        )
+
+    columns_types = {}
+    
+    type_mapping= {
+        "int64": "int",
+        "float64": "float",
+        "bool": "bool",
+        "object": "str",
+    }
+
+    # Scalar columns — skip anything that was one-hot encoded
+    for col in X_train_clean.columns:
+        if any(col.startswith(raw + "_") for raw in one_hot_prefix_map):
+            continue
+        columns_types[clean_column_name(col)] = {"type": type_mapping.get(str((raw_df[col]).dtype), "str")}
+
+    # One-hot groups — collapse into select or bool
+    for prefix, labels in one_hot_groups.items():
+        if len(labels) == 1:
+            columns_types[f"{prefix} {labels[0]}"] = {"type": "bool"}
+            continue
+        columns_types[prefix] = {"type": "select", "values": labels}
+
+    logger.info(f"columns_types: {columns_types}")
 
     # --- Step 7: PCA ---
     pca = PCA(n_components=target_variance, random_state=42)
@@ -292,7 +342,7 @@ def fit_transform_train(
         "pca": pca,
     }
 
-    return X_train_bal, y_train_bal, fitted_artifacts
+    return X_train_bal, y_train_bal, fitted_artifacts, columns_types
 
 
 def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame:
@@ -358,6 +408,16 @@ def main():
         project_root / "data" / "raw" / "retail_customers_COMPLETE_CATEGORICAL.csv"
     )
     df = pd.read_csv(data_path)
+    raw_df = df.copy()  # Keep a copy of the raw data
+
+    raw_df = values_to_nan(raw_df, columns_with_nan_values)
+    raw_df = engineer_features(raw_df)
+    raw_df = parse_ip(raw_df)
+    raw_df = parse_registration_date(raw_df)
+    raw_df = compute_days_since_registration(raw_df)[0]
+
+    # remove any rows with nan in the target column before any transformations to prevent leakage
+    raw_df = raw_df.dropna()
 
     # Structural transforms only — no target-derived statistics, no outlier removal
     df = prepare_features(df)
@@ -367,7 +427,9 @@ def main():
     X_train, X_test, y_train, y_test = split_data(df)
 
     logger.info("Fitting transformations on X_train...")
-    X_train, y_train, fitted_artifacts = fit_transform_train(X_train, y_train)
+    X_train, y_train, fitted_artifacts, columns_types = fit_transform_train(
+        X_train, y_train, raw_df
+    )
 
     # Save the fitted artifacts for test transformation and future inference
     model_dir = project_root / "models"
@@ -381,6 +443,12 @@ def main():
     save_splits(
         X_train, X_test, y_train, y_test, out_dir=project_root / "data" / "train_test"
     )
+
+    # Save the final list of columns after all transformations (except PCA) for reference
+    columns_path = model_dir / "final_columns_after_transformations.json"
+
+    with open(columns_path, "w", encoding="utf-8") as f:
+        json.dump(columns_types, f, indent=4, ensure_ascii=False)
 
 
 if __name__ == "__main__":
