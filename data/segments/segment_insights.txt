@@ -1,0 +1,89 @@
+================================================================================
+MULTI-THEME SEGMENTATION INSIGHTS
+================================================================================
+
+
+################################################################################
+ THEME: FRICTION
+################################################################################
+
+  [High-Support]
+  Size      : 1,221 (27.9%)
+  Churn risk: 32.4%
+
+    PRIORITY ACTIONS:
+      * Avg 3.6 tickets — high support load, but correlates with slighly better retention.
+
+    RECOMMENDATIONS:
+      - Build self-service knowledge base for top contact reasons
+
+  [Low-Support]
+  Size      : 2,833 (64.8%)
+  Churn risk: 34.2%
+
+    RECOMMENDATIONS:
+      - Silent majority. They do not request help but have standard/higher churn risk (silent churners).
+      - Use proactive outreach (e.g., NPS surveys) to identify dissatisfaction before they leave.
+
+  [Serial-Canceller]
+  Size      : 201 (4.6%)
+  Churn risk: 5.5%
+
+    PRIORITY ACTIONS:
+      * High cancellation load — audit cancellation reasons; likely stock/fulfilment mismatch
+
+    RECOMMENDATIONS:
+      - Offer real-time stock confirmation before order completion
+
+  [High-Returner]
+  Size      : 117 (2.7%)
+  Churn risk: 68.4%
+
+    PRIORITY ACTIONS:
+      * Return rate 40% — investigate product descriptions/sizing
+
+    RECOMMENDATIONS:
+      - Post-return survey to capture root cause
+
+
+################################################################################
+ THEME: EXPLORER
+################################################################################
+
+  [Focused-Buyer]
+  Size      : 3,505 (80.2%)
+  Churn risk: 38.2%
+
+    RECOMMENDATIONS:
+      - Narrow product scope. Focus on deep-category upsells and high-volume discounts.
+      - Do not spam with unrelated categories; stick to their known preferences.
+
+  [Broad-Explorer]
+  Size      : 867 (19.8%)
+  Churn risk: 13.3%
+
+    RECOMMENDATIONS:
+      - Highly varied product views/purchases. Cross-category promotions work best here.
+      - Feature 'discover new arrivals' content heavily in their communications.
+
+
+################################################################################
+ THEME: TIMING
+################################################################################
+
+  [Weekday-Shopper]
+  Size      : 3,797 (86.8%)
+  Churn risk: 33.6%
+
+    RECOMMENDATIONS:
+      - Activity concentrated during the workweek. Target communications during commute hours or lunch breaks.
+      - B2B/wholesale messaging might resonate better with this group.
+
+  [Weekend-Shopper]
+  Size      : 575 (13.2%)
+  Churn risk: 30.8%
+
+    RECOMMENDATIONS:
+      - Major activity peak on weekends. Schedule promotional emails for Friday evening or Saturday morning.
+      - Offer limited-time flash sales that end Sunday night.
+

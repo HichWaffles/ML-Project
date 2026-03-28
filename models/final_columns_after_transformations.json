@@ -77,6 +77,12 @@
     "Avg Basket Value": {
         "type": "float"
     },
+    "Tenure Ratio": {
+        "type": "float"
+    },
+    "Ticket Intensity": {
+        "type": "float"
+    },
     "Days Since Registration": {
         "type": "float"
     },

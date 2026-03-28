@@ -1,0 +1,27 @@
+Cluster  0  RFM=111  (R=1 F=1 M=1)  →  Lost                    n=745
+Cluster  1  RFM=112  (R=1 F=1 M=2)  →  Lost                    n=303
+Cluster  2  RFM=113  (R=1 F=1 M=3)  →  Lost                    n=44
+Cluster  3  RFM=121  (R=1 F=2 M=1)  →  Hibernating             n=57
+Cluster  4  RFM=122  (R=1 F=2 M=2)  →  Hibernating             n=132
+Cluster  5  RFM=123  (R=1 F=2 M=3)  →  Hibernating             n=48
+Cluster  6  RFM=131  (R=1 F=3 M=1)  →  Can't Lose Them         n=9
+Cluster  7  RFM=132  (R=1 F=3 M=2)  →  Can't Lose Them         n=46
+Cluster  8  RFM=133  (R=1 F=3 M=3)  →  Can't Lose Them         n=70
+Cluster  9  RFM=211  (R=2 F=1 M=1)  →  About to Sleep          n=369
+Cluster 10  RFM=212  (R=2 F=1 M=2)  →  About to Sleep          n=283
+Cluster 11  RFM=213  (R=2 F=1 M=3)  →  About to Sleep          n=42
+Cluster 12  RFM=221  (R=2 F=2 M=1)  →  Need Attention          n=44
+Cluster 13  RFM=222  (R=2 F=2 M=2)  →  Need Attention          n=189
+Cluster 14  RFM=223  (R=2 F=2 M=3)  →  Need Attention          n=103
+Cluster 15  RFM=231  (R=2 F=3 M=1)  →  At Risk                 n=2
+Cluster 16  RFM=232  (R=2 F=3 M=2)  →  At Risk                 n=85
+Cluster 17  RFM=233  (R=2 F=3 M=3)  →  At Risk                 n=330
+Cluster 18  RFM=311  (R=3 F=1 M=1)  →  Recent Customers        n=202
+Cluster 19  RFM=312  (R=3 F=1 M=2)  →  Potential Loyalists     n=124
+Cluster 20  RFM=313  (R=3 F=1 M=3)  →  Loyal                   n=18
+Cluster 21  RFM=321  (R=3 F=2 M=1)  →  Potential Loyalists     n=25
+Cluster 22  RFM=322  (R=3 F=2 M=2)  →  Loyal                   n=183
+Cluster 23  RFM=323  (R=3 F=2 M=3)  →  Loyal                   n=86
+Cluster 24  RFM=331  (R=3 F=3 M=1)  →  Loyal                   n=4
+Cluster 25  RFM=332  (R=3 F=3 M=2)  →  Champions               n=112
+Cluster 26  RFM=333  (R=3 F=3 M=3)  →  Champions               n=717

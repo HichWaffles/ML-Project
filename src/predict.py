@@ -1,33 +1,24 @@
 from pathlib import Path
 import sys
+
 import pandas as pd
-import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
 
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+if __package__ is None or __package__ == "":
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
-from src.utils import logger
-from src.data_io import load_train_test_splits
-
-MODEL_PATHS = {
-    "random_forest": project_root / "models" / "churn_rf_model.joblib",
-    "logistic_regression": project_root / "models" / "churn_lr_model.joblib",
-    "gradient_boosting": project_root / "models" / "churn_gb_model.joblib",
-    "xgboost": project_root / "models" / "churn_xgb_model.joblib",
-}
-
-
-def load_model(model_path: Path):
-    """Loads a trained machine learning model from disk."""
-    if not model_path.exists():
-        raise FileNotFoundError(
-            f"Model file not found at {model_path}. Run train_models.py first."
-        )
-    return joblib.load(model_path)
+from src.utils import (
+    MODEL_PATHS,
+    REPORTS_DIR,
+    TRAIN_TEST_DIR,
+    load_model,
+    load_train_test_splits,
+    logger,
+)
 
 
 def predict(
@@ -77,7 +68,7 @@ def predict_all(new_data: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 def generate_reports(all_results: dict[str, pd.DataFrame], y_test: pd.Series):
     """Generates confusion matrices and ROC curves for all models."""
-    reports_dir = project_root / "reports"
+    reports_dir = REPORTS_DIR / "figures" / "modeling"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Generating Evaluation Reports...")
@@ -123,8 +114,7 @@ def generate_reports(all_results: dict[str, pd.DataFrame], y_test: pd.Series):
 def main():
     """Demonstrates predictions from all 4 models using the saved test set."""
     logger.info("Loading test dataset for predictions...")
-    data_dir = project_root / "data" / "train_test"
-    _, X_test, _, y_test = load_train_test_splits(data_dir)
+    _, X_test, _, y_test = load_train_test_splits(TRAIN_TEST_DIR)
 
     all_results = predict_all(X_test)
 

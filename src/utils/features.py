@@ -1,36 +1,21 @@
+import ipaddress
+import re
+
 import geoip2.database
 import numpy as np
 import pandas as pd
-from category_encoders import TargetEncoder
-import ipaddress
-from statsmodels.stats.outliers_influence import variance_inflation_factor
 import statsmodels.api as sm
+from category_encoders import TargetEncoder
+from sklearn.ensemble import IsolationForest
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import IsolationForest
-from pathlib import Path
-import logging
-import re
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-# from scipy import stats
+from src.utils.logger import logger
+from src.utils.paths import GEOIP_DB_PATH
 
 
-# Configure centralized logger
-logger = logging.getLogger("ml_prj")
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-db_path = Path(__file__).parent.parent / "data" / "GeoLite2-City.mmdb"
-
-reader = geoip2.database.Reader(str(db_path))
-
-debug = True
+reader = geoip2.database.Reader(str(GEOIP_DB_PATH))
 
 
 def extract_ip_features(ip):
@@ -39,31 +24,24 @@ def extract_ip_features(ip):
 
     try:
         is_private = ipaddress.ip_address(ip).is_private
-
-        country = is_private and "Private" or reader.city(ip).country.name
-
+        country = "Private" if is_private else reader.city(ip).country.name
         return pd.Series([country])
-    except:
+    except Exception:
         return pd.Series([np.nan])
 
 
 def target_encode(
     df: pd.DataFrame, column: str, target_col: str = "Churn", smoothing=10, encoder=None
 ) -> tuple:
-    """
-    Applies target encoding. Fits a new encoder if none is provided (Train),
-    otherwise uses the existing encoder (Test).
-    """
+    """Apply target encoding, fitting encoder when not provided."""
     df_encoded = df.copy()
 
     if encoder is None:
         encoder = TargetEncoder(cols=[column], smoothing=smoothing)
-        # Fit and transform on training data
         df_encoded[column] = encoder.fit_transform(
             df_encoded[column], df_encoded[target_col]
         )
     else:
-        # Transform only on test data (target_col is ignored here)
         df_encoded[column] = encoder.transform(df_encoded[column])
 
     return df_encoded, encoder
@@ -76,46 +54,17 @@ def identify_redundant_features(
     use_vif: bool = True,
     vif_threshold: float = 10.0,
 ) -> list:
-    """
-    Identifies redundant features to remove based on high pairwise correlation
-    and multi-collinearity (VIF).
-
-    Args:
-        df (pd.DataFrame): The input dataset containing features and targets.
-        target_cols (list, optional): Target columns to exclude from removal.
-            The first item is used as the primary target for correlation checks.
-        corr_threshold (float, optional): Maximum allowed absolute Pearson correlation
-            between two features. Defaults to 0.8.
-        use_vif (bool, optional): Whether to perform VIF analysis after correlation
-            filtering. Defaults to True.
-        vif_threshold (float, optional): Maximum allowed Variance Inflation Factor.
-            Defaults to 10.0.
-
-    Returns:
-        list: A list of feature column names that should be dropped.
-    """
-
     if target_cols is None:
         target_cols = ["Churn", "ChurnRiskCategory"]
 
-    # 1. Create a features-only dataframe
-    # Cast to float immediately to ensure mathematical stability for bools
     features_df = df.select_dtypes(include=["number", "bool"]).astype(float).copy()
-
-    # Drop targets from features
     features_df = features_df.drop(
         columns=[c for c in target_cols if c in features_df.columns], errors="ignore"
     )
-
-    # Fill NaNs temporarily for mathematical stability
     features_df = features_df.fillna(features_df.median())
 
-    # --- PHASE 1: Correlation Analysis ---
     corr_matrix = features_df.corr().abs()
     primary_target = target_cols[0]
-
-    # Safely calculate correlation between features and the primary target only
-    # Coerce target to numeric in case it's boolean or object-encoded
     target_series = pd.to_numeric(df[primary_target], errors="coerce")
     churn_corr = features_df.apply(lambda col: col.corr(target_series)).abs()
 
@@ -125,13 +74,11 @@ def identify_redundant_features(
     for col in upper.columns:
         high_corr_pairs = upper.index[upper[col] > corr_threshold].tolist()
         for pair in high_corr_pairs:
-            # "Destroy" the feature with the weaker relationship to the target
             if churn_corr.get(col, 0) > churn_corr.get(pair, 0):
                 to_drop_corr.add(pair)
             else:
                 to_drop_corr.add(col)
 
-    # --- PHASE 2: Optional Iterative VIF Analysis ---
     to_drop_vif = []
     if use_vif:
         X_vif = features_df.drop(columns=list(to_drop_corr), errors="ignore")
@@ -140,24 +87,17 @@ def identify_redundant_features(
             if X_vif.shape[1] <= 1:
                 break
 
-            # Crucial Fix: Add a constant for accurate VIF calculation
             X_vif_const = sm.add_constant(X_vif)
-
-            # Calculate VIF
             vif_values = [
                 variance_inflation_factor(X_vif_const.values, i)
                 for i in range(X_vif_const.shape[1])
             ]
 
             vif_series = pd.Series(vif_values, index=X_vif_const.columns)
-
-            # Remove the constant from the series so we don't accidentally drop it
             if "const" in vif_series:
                 vif_series = vif_series.drop("const")
 
             max_vif = vif_series.max()
-
-            # Check if the highest VIF breaches the threshold
             if np.isfinite(max_vif) and max_vif > vif_threshold:
                 max_feat = vif_series.idxmax()
                 to_drop_vif.append(max_feat)
@@ -165,7 +105,6 @@ def identify_redundant_features(
             else:
                 break
 
-    # Return the combined set of all features to be removed
     logger.info(f"Features to drop based on correlation: {list(to_drop_corr)}")
     logger.info(f"Features to drop based on VIF: {to_drop_vif}")
     return list(to_drop_corr | set(to_drop_vif))
@@ -178,20 +117,14 @@ def impute_missing_knn(
     imputer=None,
     scaler=None,
 ) -> tuple:
-    """
-    Performs KNN imputation avoiding data leakage.
-    Returns imputed dataframe, fitted imputer, and fitted scaler.
-    """
     df_numeric = data.select_dtypes(include=["number"])
 
-    # Exclude prediction target from imputation features to prevent leakage and shape mismatch
     if "Churn" in df_numeric.columns:
         df_numeric = df_numeric.drop(columns=["Churn"])
 
     if target_columns is None:
         target_columns = df_numeric.columns.tolist()
 
-    # 1. Scale data for KNN (Fit on Train, Transform on Test)
     if scaler is None:
         scaler = StandardScaler()
         df_scaled = pd.DataFrame(
@@ -206,7 +139,6 @@ def impute_missing_knn(
             index=df_numeric.index,
         )
 
-    # 2. Impute (Fit on Train, Transform on Test)
     if imputer is None:
         imputer = KNNImputer(n_neighbors=n_neighbors)
         df_imputed_scaled = pd.DataFrame(
@@ -221,14 +153,12 @@ def impute_missing_knn(
             index=df_numeric.index,
         )
 
-    # 3. Inverse transform back to original scale
     df_final_numeric = pd.DataFrame(
         scaler.inverse_transform(df_imputed_scaled),
         columns=df_numeric.columns,
         index=df_numeric.index,
     )
 
-    # 4. Merge back into original DataFrame
     df_output = data.copy()
     for col in target_columns:
         if col in df_final_numeric.columns:
@@ -240,73 +170,37 @@ def impute_missing_knn(
 def identify_non_contributory_features(
     df: pd.DataFrame, target_cols: list = None, threshold: float = 0.1
 ) -> list:
-    """
-    Identifies features with low correlation to the target variable.
-
-    Parameters:
-    - df: pd.DataFrame containing features and target
-    - target_cols: List of target column names
-    - threshold: Minimum absolute correlation required to keep a feature
-
-    Returns:
-    - List of feature names that have low correlation with the target
-    """
     if target_cols is None:
         target_cols = ["Churn"]
     correlations = df.corr()[target_cols].abs().mean(axis=1)
-    irrelevant_features = correlations[correlations < threshold].index.tolist()
-    return irrelevant_features
+    return correlations[correlations < threshold].index.tolist()
 
 
 def split_columns_by_nan_threshold(df: pd.DataFrame, threshold: float = 0.5) -> tuple:
-    """
-    Splits columns with missing values into two lists based on a percentage threshold.
-
-    Parameters:
-    - df: The input DataFrame.
-    - threshold: The cutoff point.
-
-    Returns:
-    - low_nan_cols: List of columns with NaN share > 0 and <= threshold.
-    - high_nan_cols: List of columns with NaN share > threshold.
-    """
-    # Calculate the fraction of missing values for each column
     nan_shares = df.isna().mean()
-
-    # Filter for columns that actually have missing values
     cols_with_nans = nan_shares[nan_shares > 0]
-
-    # Split based on threshold
     low_nan_cols = cols_with_nans[cols_with_nans <= threshold].index.tolist()
     high_nan_cols = cols_with_nans[cols_with_nans > threshold].index.tolist()
-
     return low_nan_cols, high_nan_cols
 
 
 def apply_standard_scaler(
     df: pd.DataFrame, scaler=None, target_col: str = "Churn"
 ) -> tuple:
-    """
-    Standardizes continuous numeric columns, explicitly excluding target and ordinals.
-    """
     df_scaled = df.copy()
     numeric_cols = df_scaled.select_dtypes(include=["number"]).columns.tolist()
 
     if target_col in numeric_cols:
         numeric_cols.remove(target_col)
 
-    # Isolate continuous variables (Assuming > 10 unique values means continuous)
     if scaler is None:
         continuous_cols = [
             col for col in numeric_cols if len(df_scaled[col].dropna().unique()) > 10
         ]
         if continuous_cols:
             scaler = StandardScaler()
-            df_scaled[continuous_cols] = scaler.fit_transform(
-                df_scaled[continuous_cols]
-            )
+            df_scaled[continuous_cols] = scaler.fit_transform(df_scaled[continuous_cols])
     else:
-        # Use columns defined during fit to prevent mismatch on test set
         continuous_cols = list(scaler.feature_names_in_)
         if continuous_cols:
             df_scaled[continuous_cols] = scaler.transform(df_scaled[continuous_cols])
@@ -320,16 +214,6 @@ def remove_outliers_isolation_forest(
     random_state: int = 42,
     target_column: str = None,
 ):
-    """
-    Identifies and replaces outlier values with NaN using Isolation Forest.
-
-    Parameters:
-    - df: The feature DataFrame.
-    - contamination: The percentage of outliers to remove.
-    - target_column: The name of the column to apply Isolation Forest to.
-                     If None, uses all numeric columns.
-    """
-    # 1. Select columns to evaluate
     if target_column is not None:
         df_eval = df[[target_column]]
     else:
@@ -344,11 +228,9 @@ def remove_outliers_isolation_forest(
         f"Running Isolation Forest on {col_names} to replace top {contamination*100}% of outlier rows with NaN..."
     )
 
-    # 2. Fit and Predict
     iso_forest = IsolationForest(contamination=contamination, random_state=random_state)
     outlier_labels = iso_forest.fit_predict(df_eval)
 
-    # 3. Drop outlier rows
     outlier_mask = outlier_labels == -1
     df_clean = df.drop(df.index[outlier_mask])
 
@@ -360,10 +242,6 @@ def remove_outliers_isolation_forest(
 def filter_outliers(
     df: pd.DataFrame, outlier_percentages: dict, calc: bool = False
 ) -> pd.DataFrame:
-    """
-    Wrapper function to conditionally apply outlier removal.
-    """
-    # Calculate extreme outliers using MAD (Median Absolute Deviation) and z-score
     if calc:
         for col in df.select_dtypes(include=["number"]).columns:
             if col in outlier_percentages:
@@ -394,19 +272,73 @@ def filter_outliers(
 
 
 def clean_column_name(col: str) -> str:
-    # Step 1: Remove underscores, replace with space
     col = col.replace("_", " ")
-
-    # Step 2: Insert space before a single uppercase letter preceded by lowercase
-    # e.g. "camelCase" -> "camel Case"
-    # but NOT "GeoIP" -> "Geo IP" (consecutive uppercase letters are kept together)
     col = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", col)
-
-    # Step 3: Collapse any runs of whitespace between consecutive uppercase letters
-    # e.g. "GEO IP" (if spaces crept in) -> "GEOIP"
     col = re.sub(r"([A-Z])\s+([A-Z])", r"\1\2", col)
-
-    # Step 4: Strip and normalize internal whitespace
     col = re.sub(r"\s+", " ", col).strip()
-
     return col
+
+
+def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Create common derived features used by preprocessing and segmentation."""
+    if "MonetaryTotal" in df.columns and "Frequency" in df.columns:
+        df["AvgBasketValue"] = np.where(
+            df["Frequency"] > 0, df["MonetaryTotal"] / df["Frequency"], 0
+        )
+
+    if "Recency" in df.columns and "CustomerTenure" in df.columns:
+        df["TenureRatio"] = np.where(
+            df["CustomerTenure"] > 0, df["Recency"] / df["CustomerTenure"], 0
+        )
+    elif "Recency" in df.columns and "CustomerTenureDays" in df.columns:
+        df["TenureRatio"] = np.where(
+            df["CustomerTenureDays"] > 0,
+            df["Recency"] / df["CustomerTenureDays"],
+            0,
+        )
+
+    if "SupportTicketsCount" in df.columns and "CustomerTenure" in df.columns:
+        df["TicketIntensity"] = df["SupportTicketsCount"] / (df["CustomerTenure"] + 1)
+    elif "SupportTicketsCount" in df.columns and "CustomerTenureDays" in df.columns:
+        df["TicketIntensity"] = df["SupportTicketsCount"] / (
+            df["CustomerTenureDays"] + 1
+        )
+
+    if "CancelledTrans" in df.columns and "Frequency" in df.columns:
+        df["CancellationRate"] = np.where(
+            df["Frequency"] > 0, df["CancelledTrans"] / df["Frequency"], 0
+        )
+    elif "CancelledTerms" in df.columns and "Frequency" in df.columns:
+        df["CancellationRate"] = np.where(
+            df["Frequency"] > 0, df["CancelledTerms"] / df["Frequency"], 0
+        )
+
+    if "ZeroPriceCount" in df.columns and "TotalTrans" in df.columns:
+        df["ZeroPriceRatio"] = np.where(
+            df["TotalTrans"] > 0, df["ZeroPriceCount"] / df["TotalTrans"], 0
+        )
+
+    return df
+
+
+def parse_ip(df: pd.DataFrame) -> pd.DataFrame:
+    df[["GeoIP"]] = df["LastLoginIP"].apply(extract_ip_features)
+    return df
+
+
+def parse_registration_date(df: pd.DataFrame) -> pd.DataFrame:
+    df["RegistrationDate"] = pd.to_datetime(
+        df["RegistrationDate"], format="mixed", dayfirst=True, errors="coerce"
+    )
+    df["RegistrationYear"] = df["RegistrationDate"].dt.year
+    df["RegistrationMonth"] = df["RegistrationDate"].dt.month
+    df["RegistrationDay"] = df["RegistrationDate"].dt.day
+    df["RegistrationDayOfWeek"] = df["RegistrationDate"].dt.dayofweek
+    return df
+
+
+def compute_days_since_registration(df: pd.DataFrame, reference_date=None) -> tuple:
+    if reference_date is None:
+        reference_date = df["RegistrationDate"].max()
+    df["DaysSinceRegistration"] = (reference_date - df["RegistrationDate"]).dt.days
+    return df, reference_date

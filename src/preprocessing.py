@@ -1,6 +1,5 @@
 from collections import defaultdict
 from pathlib import Path
-import re
 import sys
 
 import joblib
@@ -11,22 +10,31 @@ from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE
 import json
 
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+if __package__ is None or __package__ == "":
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 from src.utils import (
     apply_standard_scaler,
-    extract_ip_features,
+    compute_days_since_registration,
+    engineer_features,
     filter_outliers,
     identify_redundant_features,
     identify_non_contributory_features,
     impute_missing_knn,
-    remove_outliers_isolation_forest,
+    load_raw_data,
+    logger,
+    parse_ip,
+    parse_registration_date,
+    PROCESSED_DIR,
+    MODELS_DIR,
+    save_processed_data,
+    save_splits,
     split_columns_by_nan_threshold,
     target_encode,
     clean_column_name,
-    logger,
+    TRAIN_TEST_DIR,
 )
 
 ordinal_mappings = {
@@ -89,70 +97,6 @@ def apply_ordinal_encoding(df: pd.DataFrame, mappings: dict) -> pd.DataFrame:
 
 def apply_one_hot_encoding(df: pd.DataFrame, columns: list) -> pd.DataFrame:
     return pd.get_dummies(df, columns=columns, drop_first=True)
-
-
-def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Creates new features based on existing transaction and customer data in-place.
-    """
-
-    if "MonetaryTotal" in df.columns and "Frequency" in df.columns:
-        df["AvgBasketValue"] = np.where(
-            df["Frequency"] > 0, df["MonetaryTotal"] / df["Frequency"], 0
-        )
-
-    if "Recency" in df.columns and "CustomerTenure" in df.columns:
-        df["TenureRatio"] = np.where(
-            df["CustomerTenure"] > 0, df["Recency"] / df["CustomerTenure"], 0
-        )
-
-    if "SupportTicketsCount" in df.columns and "CustomerTenure" in df.columns:
-        df["TicketIntensity"] = df["SupportTicketsCount"] / (df["CustomerTenure"] + 1)
-
-    if "CancelledTrans" in df.columns and "Frequency" in df.columns:
-        df["CancellationRate"] = np.where(
-            df["Frequency"] > 0, df["CancelledTrans"] / df["Frequency"], 0
-        )
-
-    if "ZeroPriceCount" in df.columns and "TotalTrans" in df.columns:
-        df["ZeroPriceRatio"] = np.where(
-            df["TotalTrans"] > 0, df["ZeroPriceCount"] / df["TotalTrans"], 0
-        )
-
-    return df
-
-
-def parse_ip(df: pd.DataFrame) -> pd.DataFrame:
-    df[["GeoIP"]] = df["LastLoginIP"].apply(extract_ip_features)
-    return df
-
-
-def parse_registration_date(df: pd.DataFrame) -> pd.DataFrame:
-    """Parses RegistrationDate into component features (year, month, day, weekday).
-    DaysSinceRegistration is intentionally NOT computed here to avoid leakage;
-    call compute_days_since_registration() separately after the train/test split.
-    """
-    df["RegistrationDate"] = pd.to_datetime(
-        df["RegistrationDate"], format="mixed", dayfirst=True, errors="coerce"
-    )
-    df["RegistrationYear"] = df["RegistrationDate"].dt.year
-    df["RegistrationMonth"] = df["RegistrationDate"].dt.month
-    df["RegistrationDay"] = df["RegistrationDate"].dt.day
-    df["RegistrationDayOfWeek"] = df["RegistrationDate"].dt.dayofweek
-    return df
-
-
-def compute_days_since_registration(df: pd.DataFrame, reference_date=None) -> tuple:
-    """Computes DaysSinceRegistration using a fixed reference_date.
-
-    During training, pass reference_date=None so it is inferred from the
-    training split only. Save the returned reference_date as a fitted artifact
-    and pass it back here when transforming the test set or new data.
-    """
-    if reference_date is None:
-        reference_date = df["RegistrationDate"].max()
-    df["DaysSinceRegistration"] = (reference_date - df["RegistrationDate"]).dt.days
-    return df, reference_date
 
 
 def values_to_nan(df: pd.DataFrame, columns_with_nan_values: dict) -> pd.DataFrame:
@@ -459,30 +403,6 @@ def transform_test(X_test: pd.DataFrame, fitted_artifacts: dict) -> pd.DataFrame
     return X_test_pca
 
 
-def save_splits(X_train, X_test, y_train, y_test, out_dir: Path):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    X_train.to_csv(out_dir / "X_train.csv", index=False)
-    X_test.to_csv(out_dir / "X_test.csv", index=False)
-    y_train.to_csv(out_dir / "y_train.csv", index=False)
-    y_test.to_csv(out_dir / "y_test.csv", index=False)
-    logger.info(f"Saved processed splits to {out_dir}")
-
-
-def save_processed_data(df: pd.DataFrame, out_dir: Path):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_dir / "processed_data.csv", index=False)
-    logger.info(f"Saved processed data to {out_dir}")
-
-
-def load_raw_data(data_path: Path | None = None) -> pd.DataFrame:
-    """Loads the raw customer dataset used by preprocessing."""
-    if data_path is None:
-        data_path = (
-            project_root / "data" / "raw" / "retail_customers_COMPLETE_CATEGORICAL.csv"
-        )
-    return pd.read_csv(data_path)
-
-
 def prepare_raw_metadata_source(
     df_raw: pd.DataFrame, target_col: str = TARGET_COL
 ) -> pd.DataFrame:
@@ -576,17 +496,15 @@ def main():
     columns_types = outputs["columns_types"]
     processed_df = outputs["processed_df"]
 
-    save_processed_data(processed_df, out_dir=project_root / "data" / "processed")
+    save_processed_data(processed_df, out_dir=PROCESSED_DIR)
 
     # Save the fitted artifacts for test transformation and future inference
-    model_dir = project_root / "models"
+    model_dir = MODELS_DIR
     model_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(fitted_artifacts, model_dir / "fitted_artifacts.joblib")
     logger.info(f"Saved fitted artifacts → {model_dir / 'fitted_artifacts.joblib'}")
 
-    save_splits(
-        X_train, X_test, y_train, y_test, out_dir=project_root / "data" / "train_test"
-    )
+    save_splits(X_train, X_test, y_train, y_test, out_dir=TRAIN_TEST_DIR)
 
     # Save the final list of columns after all transformations (except PCA) for reference
     columns_path = model_dir / "final_columns_after_transformations.json"

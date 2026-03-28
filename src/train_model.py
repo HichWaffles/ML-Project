@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -8,24 +9,22 @@ from sklearn.metrics import classification_report, roc_auc_score
 from xgboost import XGBClassifier
 import joblib
 
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+if __package__ is None or __package__ == "":
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
-from src.utils import logger
-from src.data_io import load_train_test_splits
+from src.utils import MODELS_DIR, TRAIN_TEST_DIR, load_train_test_splits, logger
 
 
 def train_models():
     """Trains Random Forest, Logistic Regression, Gradient Boosting, and XGBoost
     classifiers on the preprocessed training data and saves each model."""
 
-    data_dir = project_root / "data" / "train_test"
-
     logger.info("Loading training data...")
-    X_train, X_test, y_train, y_test = load_train_test_splits(data_dir)
+    X_train, X_test, y_train, y_test = load_train_test_splits(TRAIN_TEST_DIR)
 
-    models_dir = project_root / "models"
+    models_dir = MODELS_DIR
     models_dir.mkdir(parents=True, exist_ok=True)
 
     trained_models = {}

@@ -1,0 +1,87 @@
+THEME-BASED SEGMENTATION EXPLORATION
+======================================================================
+
+Theme                k   Silhouette  ChurnCorr (|r|)   n_rows
+-------------------------------------------------------------
+SpendVolatility      2       0.8567           0.0044    4,372
+Timing               2       0.4103           0.0146    4,293
+Friction             4       0.8399           0.0163    4,372
+Basket               2       0.7357           0.0257    4,372
+Explorer             2       0.5894           0.2111    4,372
+Lifecycle            3       0.4654           0.2851    4,372
+
+
+======================================================================
+THEME: Timing
+  Features    : ['PreferredDayOfWeek', 'PreferredHour', 'PreferredMonth', 'WeekendPurchaseRatio', 'AvgDaysBetweenPurchases']
+  k           : 2
+  Silhouette  : 0.4103
+  Churn |r|   : 0.0146
+  Rows used   : 4,293
+
+ Cluster  Size  ChurnRate  Avg_PreferredDayOfWeek  Avg_PreferredHour  Avg_PreferredMonth  Avg_WeekendPurchaseRatio  Avg_AvgDaysBetweenPurchases
+       0   574      0.307                   5.979             12.899               7.946                     0.774                        2.080
+       1  3719      0.327                   2.011             12.408               7.563                     0.033                        3.006
+
+======================================================================
+THEME: Basket
+  Features    : ['AvgQuantityPerTransaction', 'AvgLinesPerInvoice', 'AvgProductsPerTransaction', 'MonetaryAvg', 'MonetaryStd']
+  k           : 2
+  Silhouette  : 0.7357
+  Churn |r|   : 0.0257
+  Rows used   : 4,372
+
+ Cluster  Size  ChurnRate  Avg_AvgQuantityPerTransaction  Avg_AvgLinesPerInvoice  Avg_AvgProductsPerTransaction  Avg_MonetaryAvg  Avg_MonetaryStd
+       0  4182      0.330                         11.065                  20.271                         16.979           19.425           17.080
+       1   190      0.389                        106.610                   4.245                          2.913          187.828          137.211
+
+======================================================================
+THEME: Explorer
+  Features    : ['UniqueProducts', 'UniqueDescriptions', 'AvgProductsPerTransaction', 'UniqueCountries']
+  k           : 2
+  Silhouette  : 0.5894
+  Churn |r|   : 0.2111
+  Rows used   : 4,372
+
+ Cluster  Size  ChurnRate  Avg_UniqueProducts  Avg_UniqueDescriptions  Avg_AvgProductsPerTransaction  Avg_UniqueCountries
+       0  3505      0.382              33.416                  33.569                         12.526                1.000
+       1   867      0.133             162.705                 163.575                         31.895                1.000
+
+======================================================================
+THEME: Friction
+  Features    : ['ReturnRatio', 'CancelledTransactions', 'NegativeQuantityCount', 'ZeroPriceCount', 'SupportTicketsCount']
+  k           : 4
+  Silhouette  : 0.8399
+  Churn |r|   : 0.0163
+  Rows used   : 4,372
+
+ Cluster  Size  ChurnRate  Avg_ReturnRatio  Avg_CancelledTransactions  Avg_NegativeQuantityCount  Avg_ZeroPriceCount  Avg_SupportTicketsCount
+       0  3965      0.337            0.013                      0.854                      0.854               0.000                    1.941
+       1   203      0.059            0.100                     18.270                     18.270               0.000                   11.803
+       2   119      0.672            0.394                      4.353                      4.353               0.000                    2.126
+       3    85      0.306            0.017                      1.576                      1.576               0.000                  999.000
+
+======================================================================
+THEME: SpendVolatility
+  Features    : ['MonetaryStd', 'MonetaryAvg', 'MonetaryMax']
+  k           : 2
+  Silhouette  : 0.8567
+  Churn |r|   : 0.0044
+  Rows used   : 4,372
+
+ Cluster  Size  ChurnRate  Avg_MonetaryStd  Avg_MonetaryAvg  Avg_MonetaryMax
+       0  4194      0.332           16.188           20.545           80.206
+       1   178      0.343          166.333          172.782          771.268
+
+======================================================================
+THEME: Lifecycle
+  Features    : ['CustomerTenureDays', 'FirstPurchaseDaysAgo', 'TotalTransactions', 'SatisfactionScore']
+  k           : 3
+  Silhouette  : 0.4654
+  Churn |r|   : 0.2851
+  Rows used   : 4,372
+
+ Cluster  Size  ChurnRate  Avg_CustomerTenureDays  Avg_FirstPurchaseDaysAgo  Avg_TotalTransactions  Avg_SatisfactionScore
+       0  2512      0.462                  34.721                   159.027                 36.756                  2.814
+       1  1746      0.144                 275.717                   321.379                153.899                  2.829
+       2   114      0.368                 126.772                   234.474                 67.491                 99.000
