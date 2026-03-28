@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Churn Inference</title>
+    <!-- Use Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="bg-blur top-left"></div>
+    <div class="bg-blur bottom-right"></div>
+
+    <main class="container">
+        <header>
+            <h1>Churn Risk Prediction</h1>
+            <p>Customer churn risk prediction engine.</p>
+        </header>
+
+        <section class="inference-layout">
+            <div class="form-panel glass-panel">
+                <div class="panel-header">
+                    <h2>Customer Profile</h2>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <button type="button" id="random-sample-btn" class="nav-btn secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; border-color: var(--accent-blue); color: var(--accent-blue); display: none;">🎲 Random Sample</button>
+                        <span id="field-count">Loading schema...</span>
+                    </div>
+                </div>
+
+                <div class="wizard-header" id="wizard-header">
+                    <!-- Progress steps dynamically generated here -->
+                </div>
+
+                <!-- Form dynamically populated by JS -->
+                <form id="inference-form" autocomplete="off">
+                    <div id="wizard-steps" class="wizard-steps-container">
+                        <!-- Step panels generated here -->
+                    </div>
+
+                    <div class="wizard-nav">
+                        <button type="button" id="prev-btn" class="nav-btn secondary hidden">Back</button>
+                        <button type="button" id="next-btn" class="nav-btn primary hidden">Next Step</button>
+                        <button type="submit" id="predict-btn" class="submit-btn hidden" disabled>
+                            <span>Analyze Risk Profile</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="results-panel glass-panel">
+                <div class="panel-header">
+                    <h2>Inference Result</h2>
+                </div>
+                <div id="result-placeholder" class="result-display empty">
+                    <div class="spinner" id="spinner"></div>
+                    <p id="result-text">Awaiting input data...</p>
+                </div>
+
+                <div id="result-card" class="result-display hidden">
+                    <div class="risk-gauge">
+                        <svg viewBox="0 0 36 36" class="circular-chart">
+                            <path class="circle-bg"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path class="circle" id="gauge-path" stroke-dasharray="0, 100"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <text x="18" y="20.35" class="percentage" id="risk-percentage">0%</text>
+                        </svg>
+                    </div>
+                    <h3 id="prediction-label">--</h3>
+                    <p class="details" id="prediction-details">--</p>
+
+                    <div id="segment-readout" class="hidden"
+                        style="margin-top: 2rem; width: 100%; border-top: 1px solid var(--border-light); padding-top: 1.5rem; text-align: left;">
+                        <h4
+                            style="margin-bottom: 1rem; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em;">
+                            Behavioral Profile</h4>
+                        <div class="segment-badge">
+                            <span class="segment-theme">Friction:</span> <span id="seg-friction"
+                                class="segment-value">--</span>
+                        </div>
+                        <div class="segment-badge">
+                            <span class="segment-theme">Explorer:</span> <span id="seg-explorer"
+                                class="segment-value">--</span>
+                        </div>
+                        <div class="segment-badge">
+                            <span class="segment-theme">Timing:</span> <span id="seg-timing"
+                                class="segment-value">--</span>
+                        </div>
+                    </div>
+
+                    <button type="button" id="reset-btn" class="nav-btn secondary"
+                        style="width: 100%; margin-top: 2rem;">Run Another Inference</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+
+</html>

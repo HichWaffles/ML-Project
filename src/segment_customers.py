@@ -118,8 +118,9 @@ def prepare_theme_features(df_raw: pd.DataFrame, theme: str, config: dict) -> pd
     return df
 
 
-def cluster_theme(df_clean: pd.DataFrame, config: dict, seed: int = 42) -> tuple[pd.Series, dict[int, str]]:
-    """Runs KMeans and assigns names based on the centroid ranking rules."""
+def cluster_theme(df_clean: pd.DataFrame, config: dict, seed: int = 42) -> tuple:
+    """Runs KMeans and assigns names based on the centroid ranking rules.
+    Returns labels, names mapping, the fitted scaler, and the fitted KMeans model."""
     k = config["k"]
     scaler = StandardScaler()
     scaled = scaler.fit_transform(df_clean)
@@ -152,7 +153,7 @@ def cluster_theme(df_clean: pd.DataFrame, config: dict, seed: int = 42) -> tuple
                     assigned.add(cid)
                     break
 
-    return pd.Series(labels, index=df_clean.index), names
+    return pd.Series(labels, index=df_clean.index), names, scaler, km
 
 
 def profile_segments(
@@ -289,6 +290,7 @@ def main():
     df_segments = df_raw.copy()
     all_profiles = []
     all_insights = {}
+    segmentation_artifacts = {}
 
     for theme, config in THEMES.items():
         logger.info(f"\n--- Processing Theme: {theme} ---")
@@ -297,7 +299,14 @@ def main():
         if df_clean.empty:
             continue
             
-        labels, names = cluster_theme(df_clean, config)
+        labels, names, scaler, km = cluster_theme(df_clean, config)
+        
+        segmentation_artifacts[theme] = {
+            "scaler": scaler,
+            "kmeans": km,
+            "names": names,
+            "features": config["features"]
+        }
         
         # Append to main frame
         df_segments[f"{theme}_Cluster"] = labels
@@ -336,6 +345,11 @@ def main():
     # 2. Profiles CSV
     master_profiles.to_csv(SEGMENTS_DIR / "cluster_profiles.csv", index=False)
     logger.info(f"✓ cluster_profiles.csv ({len(master_profiles)} rows total)")
+
+    import joblib
+    from src.utils import MODELS_DIR
+    joblib.dump(segmentation_artifacts, MODELS_DIR / "segmentation_artifacts.joblib")
+    logger.info("✓ segmentation_artifacts.joblib")
 
     # 3. Insights Report
     report_path = SEGMENTS_DIR / "segment_insights.txt"
