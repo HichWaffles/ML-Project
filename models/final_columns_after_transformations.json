@@ -56,9 +56,6 @@
     "Spending Category": {
         "type": "str"
     },
-    "Churn Risk Category": {
-        "type": "str"
-    },
     "Basket Size Category": {
         "type": "str"
     },
@@ -69,19 +66,19 @@
         "type": "str"
     },
     "Registration Month": {
-        "type": "str"
+        "type": "int"
     },
     "Registration Day": {
-        "type": "str"
+        "type": "int"
     },
     "Registration Day Of Week": {
-        "type": "str"
+        "type": "int"
     },
     "Avg Basket Value": {
         "type": "float"
     },
     "Days Since Registration": {
-        "type": "int"
+        "type": "float"
     },
     "Customer Type": {
         "type": "select",
@@ -105,9 +102,17 @@
     "Region": {
         "type": "select",
         "values": [
+            "Afrique",
+            "Amérique du Nord",
+            "Amérique du Sud",
+            "Asie",
+            "Autre",
+            "Europe centrale",
             "Europe continentale",
             "Europe de l'Est",
             "Europe du Nord",
+            "Europe du Sud",
+            "Moyen-Orient",
             "Océanie",
             "UK"
         ]

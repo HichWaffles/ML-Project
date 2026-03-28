@@ -13,6 +13,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from src.utils import logger
+from src.data_io import load_train_test_splits
 
 
 def train_models():
@@ -22,15 +23,7 @@ def train_models():
     data_dir = project_root / "data" / "train_test"
 
     logger.info("Loading training data...")
-    X_train = pd.read_csv(data_dir / "X_train.csv")
-    y_train = pd.read_csv(data_dir / "y_train.csv")
-
-    X_test = pd.read_csv(data_dir / "X_test.csv")
-    y_test = pd.read_csv(data_dir / "y_test.csv")
-
-    # Ensure targets are 1D arrays
-    y_train = y_train.squeeze()
-    y_test = y_test.squeeze()
+    X_train, X_test, y_train, y_test = load_train_test_splits(data_dir)
 
     models_dir = project_root / "models"
     models_dir.mkdir(parents=True, exist_ok=True)

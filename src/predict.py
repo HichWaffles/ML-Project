@@ -11,6 +11,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from src.utils import logger
+from src.data_io import load_train_test_splits
 
 MODEL_PATHS = {
     "random_forest": project_root / "models" / "churn_rf_model.joblib",
@@ -123,8 +124,7 @@ def main():
     """Demonstrates predictions from all 4 models using the saved test set."""
     logger.info("Loading test dataset for predictions...")
     data_dir = project_root / "data" / "train_test"
-    X_test = pd.read_csv(data_dir / "X_test.csv")
-    y_test = pd.read_csv(data_dir / "y_test.csv").squeeze()
+    _, X_test, _, y_test = load_train_test_splits(data_dir)
 
     all_results = predict_all(X_test)
 
