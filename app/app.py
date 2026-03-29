@@ -34,8 +34,8 @@ def init_app():
     # 1. Load artifacts and model
     try:
         fitted_artifacts = joblib.load(MODELS_DIR / "fitted_artifacts.joblib")
-        # Load XGBoost as the primary real-time inference model
-        model = load_model(MODEL_PATHS["xgboost"])
+        # Load Logistic Regression as the primary real-time inference model
+        model = load_model(MODEL_PATHS["logistic_regression"])
         
         # Load Segmentation Models
         seg_artifacts_path = MODELS_DIR / "segmentation_artifacts.joblib"
@@ -43,7 +43,7 @@ def init_app():
             seg_artifacts = joblib.load(seg_artifacts_path)
             logger.info("Successfully loaded Segmentation Artifacts.")
             
-        logger.info("Successfully loaded XGBoost model and fitted artifacts.")
+        logger.info("Successfully loaded Logistic Regression model and fitted artifacts.")
     except Exception as e:
         logger.error(f"Failed to load model/artifacts: {e}")
         

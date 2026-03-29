@@ -248,8 +248,8 @@ To illustrate the imputation strategy concretely, the \textit{Age} column is exa
 Following imputation, a rigorous feature selection layer dropped any surviving components that provided non-contributory mutual information relative to Churn (threshold $<$ 0.01) before standardizing scales.
 
 \subsection{Standardization and Dimensionality Reduction}
-To harmonize scales, all variables were standardized (mean of 0, standard deviation of 1) before applying Principal Component Analysis (\textbf{PCA}). The PCA preserved 99\% of the statistical variance by successfully compressing the transformed feature space down to exactly \textbf{31 principal components}. 
-During algorithmic testing, a more aggressive 98\% variance threshold was evaluated. However, this threshold only marginally reduced the feature space to \textbf{29 components} (a minimal gain in dimensionality compression) while triggering a noticeable degradation in downstream classification performance. Consequently, the 99\% target was explicitly locked as the optimal structural anchor. While the full 31-dimensional space is strictly utilized by the predictive models to capture variance, a strictly 2-dimensional spatial projection (isolating just the first two principal components) is provided in \textbf{Figure~\ref{fig:pca}} to offer a human-readable visualization of the dataset's structural distribution.
+To harmonize scales, all variables were standardized (mean of 0, standard deviation of 1) before applying Principal Component Analysis (\textbf{PCA}). The PCA preserved 99\% of the statistical variance by successfully compressing the transformed feature space down to exactly \textbf{28 principal components}. 
+Consequently, the 99\% target was explicitly locked as the optimal structural anchor. While the full 28-dimensional space is strictly utilized by the predictive models to capture variance, a strictly 2-dimensional spatial projection (isolating just the first two principal components) is provided in \textbf{Figure~\ref{fig:pca}} to offer a human-readable visualization of the dataset's structural distribution.
 
 \begin{figure}[H]
     \centering
@@ -403,7 +403,7 @@ The generated segmentation reports quantitatively confirm the discriminative pow
 
 Metrics on the test set, notably the Area Under the ROC Curve (\textbf{AUC}) and overall accuracy, demonstrated excellent generalizing capability (see Figure~\ref{fig:roc_curves}). Specifically, the models achieved the following test accuracies: \textbf{Random Forest} (94.29\%), \textbf{Logistic Regression} (98.74\%), \textbf{Gradient Boosting} (96.00\%), and \textbf{XGBoost} (96.00\%). 
 
-Optimization led to selecting \textbf{XGBoost} as the final reference model due to its robust accuracy (96.00\%) and superior precision/recall ratio on the critical prediction (the leaving customer). Confusion matrices enabled business collaborators to estimate the impacts of false negatives (undetected lost customers), as visualized in Figure~\ref{fig:confusion_matrix}.
+Optimization led to selecting \textbf{Logistic Regression} as the final reference model due to its superior accuracy (98.74\%) and robust precision/recall ratio on the critical prediction (the leaving customer). Confusion matrices enabled business collaborators to estimate the impacts of false negatives (undetected lost customers), as visualized in Figure~\ref{fig:confusion_matrix}.
 
 \begin{figure}[H]
     \centering
@@ -438,7 +438,7 @@ Optimization led to selecting \textbf{XGBoost} as the final reference model due 
         \includegraphics[width=\linewidth]{figures/modeling/xgboost_confusion_matrix.png}
         \caption{XGBoost}
     \end{subfigure}
-    \caption{Confusion Matrices for all evaluated models: (a) Baseline Linear, (b) \& (c) Ensemble frameworks, and (d) the final top-performing XGBoost architecture.}
+    \caption{Confusion Matrices for all evaluated models: (a) Logistic Regression (the final top-performing architecture), (b) \& (c) Ensemble frameworks, and (d) XGBoost.}
     \label{fig:confusion_matrix}
 \end{figure}
 
@@ -448,7 +448,7 @@ In compliance with the culmination of the CRISP-DM life cycle, the technical pha
 \begin{itemize}
     \item \textbf{A dynamic front-end}: Customer test forms are generated via the interface strictly aligning with the initial feature profiling (via the \texttt{/api/schema} endpoint).
     \item \textbf{Instant Demo Sampling}: An \texttt{/api/sample} endpoint was explicitly programmed to instantly fetch and stream a fully randomized pre-processed customer profile directly into the UI.
-    \item \textbf{Real-time inference}: The complete preparation pipeline (\textit{fitted transformers}, scalers, and PCA generated during training) is instantiated on new data and the \textbf{XGBoost} model is called.
+    \item \textbf{Real-time inference}: The complete preparation pipeline (\textit{fitted transformers}, scalers, and PCA generated during training) is instantiated on new data and the \textbf{Logistic Regression} model is called.
     \item \textbf{Behavioral Profiling}: The application does not merely return the final churn risk probability; it explicitly maps and displays the user's computed segment categorizations across the 3 core thematic axes (\textit{Friction}, \textit{Explorer}, and \textit{Timing}) to provide immediate contextual depth alongside the prediction.
 \end{itemize}
 
@@ -465,12 +465,12 @@ In compliance with the culmination of the CRISP-DM life cycle, the technical pha
         \includegraphics[height=6.5cm, keepaspectratio]{figures/deployment/result.png}
         \caption{Real-Time Inference Result Panel}
     \end{subfigure}
-    \caption{Deployment Interface: Submitting a customer profile for live XGBoost churn prediction and segment profiling.}
+    \caption{Deployment Interface: Submitting a customer profile for live Logistic Regression churn prediction and segment profiling.}
     \label{fig:deployment}
 \end{figure}
 
 \section{Conclusion}
 
-By restructuring traditional customer analysis through the full implementation of the Data Science lifecycle, this project shifts from simple descriptive interpretation of raw data to a predictive, interactive, and business-focused system. The combination of K-Means profiling by "themes" and XGBoost Churn prediction now equips the company for surgical marketing campaigns and optimized retention.
+By restructuring traditional customer analysis through the full implementation of the Data Science lifecycle, this project shifts from simple descriptive interpretation of raw data to a predictive, interactive, and business-focused system. The combination of K-Means profiling by "themes" and Logistic Regression Churn prediction now equips the company for surgical marketing campaigns and optimized retention.
 
 \end{document}
