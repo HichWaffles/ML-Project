@@ -308,13 +308,41 @@ Rather than applying the K-Means algorithm to a global and noisy point cloud, a 
 \end{figure}
 
 \subsection{Churn Prediction (Classification)}
-We modeled the target variable across four formidable algorithms:
+The target variable was modeled across four discrete algorithms:
 \begin{itemize}
     \item \textbf{Logistic Regression}: As a linear baseline reference.
-    \item \textbf{Random Forest} and \textbf{Gradient Boosting}: Powerful ensemble methods for non-linear relationships.
+    \item \textbf{Random Forest} and \textbf{Gradient Boosting}: Ensemble methods for non-linear relationships.
     \item \textbf{XGBoost}: Specifically handles class imbalance via the \texttt{scale\_pos\_weight} parameter and captures predictive behaviors with high precision.
 \end{itemize}
-Hyperparameter tuning was optimized through \texttt{GridSearchCV} (3-fold Cross-Validation) by maximizing the area under the ROC curve.
+
+\subsubsection{Hyperparameter Optimization (GridSearchCV)}
+To ensure rigorous and unbiased evaluation, hyperparameter tuning was conducted using \texttt{GridSearchCV} with 3-fold Cross-Validation, optimizing exclusively for the Area Under the Receiver Operating Characteristic Curve (ROC-AUC). The tested grids and mathematically selected parameters are documented below:
+
+\begin{itemize}
+    \item \textbf{Logistic Regression}:
+    \begin{itemize}
+        \item \textit{Grid}: \texttt{C} $\in \{0.01, 0.1, 1, 10, 100\}$, \texttt{solver} $\in \{\text{lbfgs, saga}\}$, \texttt{penalty} $\in \{\text{l2}\}$
+        \item \textit{Selected}: \texttt{C}=10, \texttt{solver}=lbfgs, \texttt{penalty}=l2
+    \end{itemize}
+
+    \item \textbf{Random Forest}:
+    \begin{itemize}
+        \item \textit{Grid}: \texttt{n\_estimators} $\in \{50, 100, 200\}$, \texttt{max\_depth} $\in \{5, 10, 20, \text{None}\}$, \texttt{min\_samples\_split} $\in \{2, 5, 10\}$
+        \item \textit{Selected}: \texttt{n\_estimators}=200, \texttt{max\_depth}=None, \texttt{min\_samples\_split}=2
+    \end{itemize}
+
+    \item \textbf{Gradient Boosting}:
+    \begin{itemize}
+        \item \textit{Grid}: \texttt{n\_estimators} $\in \{100, 200\}$, \texttt{max\_depth} $\in \{3, 5, 7\}$, \texttt{learning\_rate} $\in \{0.05, 0.1, 0.2\}$, \texttt{subsample} $\in \{0.8, 1.0\}$
+        \item \textit{Selected}: \texttt{n\_estimators}=200, \texttt{max\_depth}=5, \texttt{learning\_rate}=0.2, \texttt{subsample}=0.8
+    \end{itemize}
+
+    \item \textbf{XGBoost}:
+    \begin{itemize}
+        \item \textit{Grid}: \texttt{n\_estimators} $\in \{100, 200, 300\}$, \texttt{max\_depth} $\in \{3, 5, 7\}$, \texttt{learning\_rate} $\in \{0.05, 0.1, 0.2\}$, \texttt{subsample} $\in \{0.8, 1.0\}$, \texttt{colsample\_bytree} $\in \{0.8, 1.0\}$
+        \item \textit{Selected}: \texttt{n\_estimators}=300, \texttt{max\_depth}=3, \texttt{learning\_rate}=0.2, \texttt{subsample}=0.8, \texttt{colsample\_bytree}=1.0
+    \end{itemize}
+\end{itemize}
 
 \section{Evaluation}
 

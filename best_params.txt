@@ -1,0 +1,25 @@
+2026-03-29 06:02:47 - INFO - --- MODEL 1: Random Forest ---
+
+2026-03-29 06:03:09 - INFO - Best parameters: {'max_depth': None, 'min_samples_split': 2, 'n_estimators': 200}
+
+2026-03-29 06:03:09 - INFO - Best CV ROC-AUC: 0.9945
+
+2026-03-29 06:03:10 - INFO - --- MODEL 2: Logistic Regression ---
+
+2026-03-29 06:03:12 - INFO - Best parameters: {'C': 10, 'penalty': 'l2', 'solver': 'lbfgs'}
+
+2026-03-29 06:03:12 - INFO - Best CV ROC-AUC: 0.9996
+
+2026-03-29 06:03:12 - INFO - --- MODEL 3: Gradient Boosting ---
+
+2026-03-29 06:04:50 - INFO - Best parameters: {'learning_rate': 0.2, 'max_depth': 5, 'n_estimators': 200, 'subsample': 0.8}
+
+2026-03-29 06:04:50 - INFO - Best CV ROC-AUC: 0.9971
+
+2026-03-29 06:04:50 - INFO - --- MODEL 4: XGBoost ---
+
+2026-03-29 06:05:26 - INFO - Best parameters: {'colsample_bytree': 1.0, 'learning_rate': 0.2, 'max_depth': 3, 'n_estimators': 300, 'subsample': 0.8}
+
+2026-03-29 06:05:26 - INFO - Best CV ROC-AUC: 0.9975
+
+2026-03-29 06:05:26 - INFO - --- ALL MODELS TRAINED AND SAVED ---
