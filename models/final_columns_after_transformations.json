@@ -50,9 +50,6 @@
     "Satisfaction Score": {
         "type": "float"
     },
-    "RFMSegment": {
-        "type": "str"
-    },
     "Spending Category": {
         "type": "str"
     },
@@ -77,24 +74,11 @@
     "Avg Basket Value": {
         "type": "float"
     },
-    "Tenure Ratio": {
-        "type": "float"
-    },
     "Ticket Intensity": {
         "type": "float"
     },
     "Days Since Registration": {
         "type": "float"
-    },
-    "Customer Type": {
-        "type": "select",
-        "values": [
-            "Hyperactif",
-            "Nouveau",
-            "Occasionnel",
-            "Perdu",
-            "Régulier"
-        ]
     },
     "Favorite Season": {
         "type": "select",

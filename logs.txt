@@ -1,0 +1,63 @@
+2026-03-29 04:21:31 - INFO - Loading test dataset for predictions...
+2026-03-29 04:21:31 - INFO - --- Model: Random Forest ---
+2026-03-29 04:21:31 - INFO - Sample Predictions:
+   Churn_Prediction  Churn_Probability
+0                 0              0.035
+1                 0              0.050
+2                 0              0.115
+3                 0              0.030
+4                 1              0.955
+5                 0              0.030
+6                 1              0.990
+7                 0              0.020
+8                 0              0.055
+9                 1              0.895
+2026-03-29 04:21:31 - INFO - Prediction Accuracy on Test Set: 0.9851
+2026-03-29 04:21:31 - INFO - --- Model: Logistic Regression ---
+2026-03-29 04:21:31 - INFO - Sample Predictions:
+   Churn_Prediction  Churn_Probability
+0                 0           0.016098
+1                 0           0.010760
+2                 0           0.263918
+3                 0           0.005245
+4                 1           0.989180
+5                 0           0.003051
+6                 1           0.999368
+7                 0           0.044282
+8                 0           0.000032
+9                 1           0.957973
+2026-03-29 04:21:31 - INFO - Prediction Accuracy on Test Set: 0.9863
+2026-03-29 04:21:31 - INFO - --- Model: Gradient Boosting ---
+2026-03-29 04:21:31 - INFO - Sample Predictions:
+   Churn_Prediction  Churn_Probability
+0                 0       3.058456e-05
+1                 0       1.385210e-05
+2                 0       3.149431e-03
+3                 0       1.684522e-06
+4                 1       9.998888e-01
+5                 0       4.559646e-07
+6                 1       9.999816e-01
+7                 0       1.675233e-04
+8                 0       4.601467e-05
+9                 1       9.996821e-01
+2026-03-29 04:21:31 - INFO - Prediction Accuracy on Test Set: 0.9886
+2026-03-29 04:21:31 - INFO - --- Model: Xgboost ---
+2026-03-29 04:21:31 - INFO - Sample Predictions:
+   Churn_Prediction  Churn_Probability
+0                 0           0.000013
+1                 0           0.000054
+2                 0           0.003275
+3                 0           0.000003
+4                 1           0.999810
+5                 0           0.000007
+6                 1           0.999938
+7                 0           0.000287
+8                 0           0.000170
+9                 1           0.999624
+2026-03-29 04:21:31 - INFO - Prediction Accuracy on Test Set: 0.9931
+2026-03-29 04:21:31 - INFO - Generating Evaluation Reports...
+2026-03-29 04:21:32 - INFO - Saved Confusion Matrix to D:\ml_prj\reports\figures\modeling\random_forest_confusion_matrix.png
+2026-03-29 04:21:32 - INFO - Saved Confusion Matrix to D:\ml_prj\reports\figures\modeling\logistic_regression_confusion_matrix.png
+2026-03-29 04:21:32 - INFO - Saved Confusion Matrix to D:\ml_prj\reports\figures\modeling\gradient_boosting_confusion_matrix.png
+2026-03-29 04:21:33 - INFO - Saved Confusion Matrix to D:\ml_prj\reports\figures\modeling\xgboost_confusion_matrix.png
+2026-03-29 04:21:33 - INFO - Saved Combined ROC Curves to D:\ml_prj\reports\figures\modeling\roc_curves_combined.png

@@ -1,0 +1,7 @@
+2026-03-29 06:05:30 - INFO - Prediction Accuracy on Test Set: 0.9429
+2026-03-29 06:05:30 - INFO - --- Model: Logistic Regression ---
+2026-03-29 06:05:30 - INFO - Prediction Accuracy on Test Set: 0.9874
+2026-03-29 06:05:30 - INFO - --- Model: Gradient Boosting ---
+2026-03-29 06:05:30 - INFO - Prediction Accuracy on Test Set: 0.9600
+2026-03-29 06:05:30 - INFO - --- Model: Xgboost ---
+2026-03-29 06:05:30 - INFO - Prediction Accuracy on Test Set: 0.9600

@@ -56,7 +56,6 @@ ordinal_mappings = {
 }
 
 one_hot_cols = [
-    "CustomerType",
     "FavoriteSeason",
     "Region",
     "WeekendPreference",
@@ -71,6 +70,8 @@ columns_to_drop = [
     "LastLoginIP",
     "Recency",  # Dropped because it basically already tells you everything about the target variable (churners have very high recency), and it doesn't make sense to keep it after creating TenureRatio. It also has a lot of missing values, and the few non-missing values are likely to be unreliable given the churn pattern.
     "ChurnRiskCategory",  # Dropped because it's a target leakage variable (it was created by the marketing team based on their assessment of how likely each customer is to churn, which is basically the same thing we're trying to predict). It also has a lot of missing values and is very imbalanced, so it would be hard to impute or use effectively even if we wanted to keep it.
+    "RFMSegment",
+    "CustomerType"  # 100% target leak: 'Perdu' maps purely to churn=1, while others map purely to churn=0.
     # NOTE: RegistrationDate is NOT dropped here; it must survive into
     # fit_transform_train / transform_test so compute_days_since_registration
     # can read it. It is dropped there, after DaysSinceRegistration is created.
@@ -124,9 +125,8 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     df = values_to_nan(df, columns_with_nan_values)
     df = apply_ordinal_encoding(df, ordinal_mappings)
     df = parse_registration_date(df)
-    df = engineer_features(df)
-
     df = prune_nonessential_features(df, columns_to_drop)
+    df = engineer_features(df)
 
     return df
 
