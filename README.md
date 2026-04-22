@@ -1,6 +1,8 @@
 # Retail Customer Behavioral Analysis
 
 > **📘 Read the Full Project Report**: [ProjetML.pdf](reports/ProjetML.pdf)
+> **🎤 Presentation Link**: [View the Presentation](https://canva.link/veves5vewf7fmz4)
+
 ## Project Overview
 
 This project focuses on analyzing customer behavior for an e-commerce gift company. The objective is to leverage a dataset of 52 features to personalize marketing strategies, reduce customer churn, and optimize overall revenue.
